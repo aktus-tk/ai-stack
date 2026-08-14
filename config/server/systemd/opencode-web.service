@@ -1,6 +1,6 @@
 # opencode-web.service
 # サーバー (/etc/systemd/system/opencode-web.service) に配置する。
-# opencode mobile / web クライアント向けの headless サーバー。
+# web / モバイルクライアント向けの headless サーバー。
 #
 #   sudo cp config/server/systemd/opencode-web.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
@@ -9,9 +9,9 @@
 # 実環境では必ず以下を実値に置き換えること:
 #   - LITELLM_API_KEY          (クライアントと同じ仮想キー)
 #   - HARNESS_MEM_ADMIN_TOKEN  (harness-memd.service と同じトークン)
-#   - OPENCODE_SERVER_PASSWORD (長いランダム値)
 #
-# 接続: http://100.92.131.75:4096  (basic auth: opencode / <PASSWORD>)
+# 認証はなし (Tailscale 内のみバインドのため)。モバイルクライアントは
+# OpenClient for OpenCode に http://100.92.131.75:4096 を設定する。
 
 [Unit]
 Description=OpenCode Web Server
@@ -28,8 +28,6 @@ Environment="PATH=/home/tk/.bun/bin:/home/tk/.volta/bin:/usr/local/sbin:/usr/loc
 Environment="LITELLM_API_KEY=REPLACE_WITH_LITELLM_KEY"
 Environment="HARNESS_MEM_HOST=100.92.131.75"
 Environment="HARNESS_MEM_ADMIN_TOKEN=REPLACE_WITH_HARNESS_TOKEN"
-Environment="OPENCODE_SERVER_PASSWORD=REPLACE_WITH_LONG_RANDOM_PASSWORD"
-Environment="OPENCODE_SERVER_USERNAME=opencode"
 # ヘッドレスサーバーなのでブラウザ自動起動を無効化 (ログノイズ対策)
 Environment="BROWSER=/bin/true"
 

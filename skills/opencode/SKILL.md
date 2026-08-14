@@ -99,12 +99,21 @@ if (compaction.auto !== false
 ## モバイル / リモート接続 (opencode web)
 
 サーバー上で `opencode-web.service` (systemd) が headless サーバーを常駐させる。
-iPhone (opencode mobile) やブラウザから接続する。
+ブラウザやモバイルクライアントから接続する。
 
+- **モバイルクライアント**: OpenClient for OpenCode
+  (App Store: `https://apps.apple.com/jp/app/openclient-for-opencode/id6763641767`)
+  - サーバー設定に `http://100.92.131.75:4096` を指定する
 - **接続先**: `http://100.92.131.75:4096` (Tailscale IP にのみバインド)
-- **認証**: basic auth (`opencode` / `OPENCODE_SERVER_PASSWORD`)
+- **認証**: なし (Tailscale 内のみバインドのため basic auth は無効化)
 - **systemd**: `ssh x 'sudo systemctl status opencode-web'`
 - **unit 例**: `config/server/systemd/opencode-web.service`
+
+### 注意
+
+- `opencode web` は plain HTTP サーバーのため、`https://` では接続できない。
+  `http://` を指定すること。
+- ブラウザ自動起動 (`xdg-open`) のエラーはヘッドレス環境では無害。
 
 ## 関連
 
