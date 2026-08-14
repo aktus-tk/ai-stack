@@ -41,6 +41,61 @@ opencode (対話型 AI エージェント CLI) の設定と運用知識。
   set -ga terminal-overrides ",*:smcup@:rmcup@"
   ```
 
+## コンテキスト量の確認
+
+コンテキストは opencode の SQLite ストレージに保存されている。現在のセッションの
+コンテキスト量は以下の SQL で見積もれる (パーツのテキスト量から概算)。
+
+```bash
+sqlite3 ~/.local/share/opencode/opencode.db \
+  "SELECT COUNT(*), SUM(length(data)) FROM part
+   WHERE session_id='<session_id>';"
+```
+
+- `length(data)` 合計 / 3.5 ≈ トークン数 (日本語+英語+JSON 混在の概算)
+- セッション累計使用量は `session.tokens_input` 列でも確認できる
+
+## Context compaction 仕様
+
+### トリガー条件
+
+opencode は**毎ステップ (step-finish) の後**に累積トークンを判定し、閾値超過で
+自動 compaction を実行する (`compaction.auto` が true のとき。デフォルト有効)。
+
+```js
+// 閾値 = モデルのコンテキスト上限 - reserved バッファ
+reserved = config.compaction?.reserved ?? min(20000, maxOutputTokens)
+// 発火条件
+if (compaction.auto !== false
+    && model.limit.context > 0
+    && (tokens.total || input+output+cache.read+cache.write) >= 閾値)
+  → 自動 compaction
+```
+
+- 対象: 累積 input + output + cache read/write トークン
+- 例: コンテキスト 128K のモデルだと約 **120K トークン**で自動発火
+  (128000 - reserved)
+- **Context overflow エラー** (プロバイダが上限超過を拒否) 時も強制 compaction が走る
+- 手動実行は `/compact` (keybind: `ctrl+x c`)。エイリアス `/summarize`
+
+### 設定 (`opencode.json`)
+
+```json
+{
+  "compaction": {
+    "auto": true,      // コンテキスト満杯時に自動 compaction (default: true)
+    "prune": false,    // 古いツール出力を削除してトークン節約 (default: false)
+    "reserved": 10000  // compaction 用のトークン余白 (default: min(20000, maxOutputTokens))
+  }
+}
+```
+
+### 注意
+
+- compaction は会話を要約に置き換えるため、詳細なやり取りは harness-mem 側に
+  残る。必要なら harness-mem を検索して復元する。
+- `prune` 有効時は古いツール出力が捨てられ、`skill` 系ツールは保護対象。
+
 ## 関連
 
 - クライアント構築 → `runbooks/bootstrap-client.md`
