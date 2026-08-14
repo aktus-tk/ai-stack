@@ -1,0 +1,8 @@
+.env
+.envrc
+*.db
+*.db-wal
+*.db-shm
+*.bak-*
+*.token
+!*.env.example
