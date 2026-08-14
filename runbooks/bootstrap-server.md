@@ -45,12 +45,36 @@ docker compose up -d
 
 LiteLLM UI: `http://162.43.21.240:4000/ui`
 
-## 5. 検証
+## 5. opencode web サーバー (mobile / web クライアント用)
+
+iPhone の opencode mobile やブラウザからサーバー上の opencode に
+接続するための headless サーバー。Tailscale IP にのみバインドする。
+
+```bash
+# opencode 本体 (リモートに未導入の場合)
+curl -fsSL https://opencode.ai/install | bash
+
+# systemd unit 配置 (config/server/systemd/opencode-web.service)
+sudo cp config/server/systemd/opencode-web.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now opencode-web
+```
+
+unit 内で以下を実値に置き換えること:
+- `LITELLM_API_KEY` — クライアントと同じ仮想キー
+- `HARNESS_MEM_ADMIN_TOKEN` — harness-memd.service と同じトークン
+- `OPENCODE_SERVER_PASSWORD` — 長いランダム値 (basic auth 用)
+
+接続先: `http://100.92.131.75:4096` (ユーザー `opencode`)
+
+## 6. 検証
 
 ```bash
 ssh x 'systemctl status harness-memd'
+ssh x 'systemctl status opencode-web'
 ssh x 'cd ~/docker/litellm && docker compose ps'
 curl -s http://100.92.131.75:37888/health
+curl -s -u opencode:<PASSWORD> http://100.92.131.75:4096/global/health
 ```
 
 ## 補足: ハードニング
@@ -58,4 +82,7 @@ curl -s http://100.92.131.75:37888/health
 - harness-mem daemon は Tailscale IP にのみバインド (公開面を最小化)。
 - 厳密な認証が必要な場合、`~/.harness-mem/config.json` に `auth` セクションを追加
   (architecture/security.md 参照)。
+- opencode web サーバーも Tailscale IP にのみバインドし、basic auth
+  (`OPENCODE_SERVER_PASSWORD`) を必ず設定する。Tailscale ACL で
+  iPhone などのノードのみアクセス許可するのが望ましい。
 - LiteLLM の image tag は `latest` でなくリリースタグに固定推奨。

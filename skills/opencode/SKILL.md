@@ -96,7 +96,18 @@ if (compaction.auto !== false
   残る。必要なら harness-mem を検索して復元する。
 - `prune` 有効時は古いツール出力が捨てられ、`skill` 系ツールは保護対象。
 
+## モバイル / リモート接続 (opencode web)
+
+サーバー上で `opencode-web.service` (systemd) が headless サーバーを常駐させる。
+iPhone (opencode mobile) やブラウザから接続する。
+
+- **接続先**: `http://100.92.131.75:4096` (Tailscale IP にのみバインド)
+- **認証**: basic auth (`opencode` / `OPENCODE_SERVER_PASSWORD`)
+- **systemd**: `ssh x 'sudo systemctl status opencode-web'`
+- **unit 例**: `config/server/systemd/opencode-web.service`
+
 ## 関連
 
 - クライアント構築 → `runbooks/bootstrap-client.md`
+- サーバー構築 → `runbooks/bootstrap-server.md`
 - 設定例 → `config/client/opencode.json.example`

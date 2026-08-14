@@ -10,7 +10,7 @@ AI エージェント(Claude Code / opencode / Codex など)が安全に動作�
 | コンポーネント | 役割 | 場所 |
 |---|---|---|
 | LiteLLM Proxy | LLM ゲートウェイ・仮想キー管理 | サーバー (Docker) |
-| opencode | 対話型 AI エージェント CLI | クライアント |
+| opencode | 対話型 AI エージェント CLI / web・mobile サーバー | クライアント + サーバー (systemd) |
 | harness-mem | セッション/記憶の永続化 (MCP サーバー + daemon) | サーバー (systemd) |
 | Tailscale | サーバー⇔クライアント間の暗号化 VPN メッシュ | 全ノード |
 
