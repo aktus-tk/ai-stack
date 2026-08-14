@@ -84,8 +84,27 @@ TUI のマウスモードを無効化する (`tui.json`)。
 }
 ```
 
-### 8. 検証
+### 8. Google Drive マウント (任意)
 
+opencode から Google Drive (`~/gdrive`) を読み書きしたい場合は
+`runbooks/mount-gdrive.md` を参照。
+
+```bash
+# rclone を未導入なら
+sudo apt-get install -y rclone fuse3
+
+# OAuth 認証 (初回のみ、ブラウザでの許可が必要)
+rclone config create gdrive drive scope=drive
+
+# マウント
+~/github/aktus-tk/ai-stack/scripts/mount-gdrive.sh
+```
+
+- `~/.bashrc` に `~/bin/mount-gdrive.sh` を追記すると WSL 起動時に自動マウントされる。
+- `config/client/opencode.json.example` の `permission.external_directory` が
+  `~/gdrive/**` へのアクセス許可を付与する。
+
+### 9. 検証
 ```bash
 ./scripts/verify.sh
 ```
