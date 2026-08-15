@@ -76,7 +76,7 @@ opencode                                    # 新規/セッション選択
 ```
 
 - モデル・MCP は `~/.config/opencode/opencode.json` を参照
-  (LiteLLM は移行期間中のため `http://127.0.0.1:4000/v1` で接続)
+  (LiteLLM は `http://100.92.131.75:4000/v1` で接続。Tailscale IP のみに bind)
 - セッションは `~/.local/share/opencode/opencode.db` に保存
 
 ### 2. Docker コンテナ経由 (推奨)

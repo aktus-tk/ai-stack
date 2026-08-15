@@ -61,8 +61,8 @@ if [ "$QUICK" = "--quick" ]; then
 fi
 
 echo "== 2. LiteLLM 疎通 =="
-# 移行期間中は 127.0.0.1:4000 に bind している。完全移行後は litellm:4000 で直接確認。
-LITELLM_HOST="${LITELLM_VERIFY_URL:-http://127.0.0.1:4000}"
+# LiteLLM は Tailscale IP (100.92.131.75:4000) に bind。
+LITELLM_HOST="${LITELLM_VERIFY_URL:-http://100.92.131.75:4000}"
 code=$(curl -s -o /dev/null -w "%{http_code}" -m 5 \
   "${LITELLM_HOST}/v1/models" -H "Authorization: Bearer ${LITELLM_API_KEY}" || echo 000)
 if [ "$code" = "200" ]; then
@@ -98,9 +98,10 @@ fi
 
 echo "== 6. security boundary =="
 # 公開 bind (0.0.0.0 / 公開IP) に 4000/37888/5432/4096 が無いこと
+# 例外: litellm:4000 は Tailscale IP のみに bind (自宅 opencode 用) — ここでは 0.0.0.0 でなければ OK。
 leaked=$(ss -tlnp 2>/dev/null | grep -E "0.0.0.0:(4000|37888|5432|4096)" || true)
 if [ -z "$leaked" ]; then
-  echo "[ok] 4000/37888/5432/4096 は public に露出していない"
+  echo "[ok] 4000/37888/5432/4096 は public (0.0.0.0) に露出していない"
 else
   echo "[ng] 公開ポート漏れ: ${leaked}"
   fail=1

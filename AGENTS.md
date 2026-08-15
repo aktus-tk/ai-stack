@@ -26,9 +26,10 @@
 | harness-mem daemon (compose 内) | `http://harness-memd:37888` | `HARNESS_MEM_ADMIN_TOKEN` |
 | opencode server (外部入口) | `http://100.92.131.75:8090` (Caddy) | basic auth |
 
-- 4000 / 37888 / 5432 / 4096 はホストへ **publish しない**。compose 内の service name で通信。
+- 4000 / 37888 / 5432 / 4096 は public へ **publish しない**。compose 内の service name で通信。
 - 唯一の外部入口は **Caddy** (`100.92.131.75:8090`)、HTTP + Basic Auth で opencode-server へ proxy。
-- 移行期間中のみ LiteLLM が `127.0.0.1:4000` に bind (ホスト側 opencode 用)。移行完了後は削除。
+- 例外: LiteLLM `4000` のみ Tailscale IP (`100.92.131.75:4000`) に bind。自宅の opencode から
+  直接接続するためで、Tailscale 経由 + ログイン認証 (LITELLM_API_KEY) があるため公開しない。
 
 ## 作業時の鉄則
 
