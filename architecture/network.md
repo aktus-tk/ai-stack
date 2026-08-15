@@ -1,41 +1,94 @@
 # ネットワーク設計
 
+2026-08-15 以降、AI スタックは **Docker Compose (`ai-stack`)** で運用され、
+内部サービスは**ホストへ publish しない**。唯一の外部入口は **Caddy**。
+
 ## ノード
 
 | ノード | 公開 IP | Tailscale IP | 役割 |
 |---|---|---|---|
-| サーバー `x162-43-21-240` | `162.43.21.240` | `100.92.131.75` | LiteLLM / harness-mem daemon / その他サービス |
-| クライアント `desk` | — | `100.122.82.18` | opencode / エージェント CLI |
+| サーバー `x162-43-21-240` | `162.43.21.240` | `100.92.131.75` | ai-stack compose (LiteLLM / harness-mem / opencode-server / Caddy) |
+| クライアント `desk` | — | `100.122.82.18` | opencode (Docker wrapper) / エージェント CLI |
+| スマホ iPhone | — | `100.66.98.118` | OpenClient for OpenCode |
+
+## アーキテクチャ
+
+```text
+        Smartphone / desktop
+                │
+            Tailscale
+                │
+                ▼
+    x / 100.92.131.75
+                │
+         Caddy :8090        ← 唯一の外部入口 (HTTP + Basic Auth)
+                │
+                ▼
+┌──────── Docker Compose ────────┐
+│                                │
+│  opencode-server :4096         │
+│        │            │          │
+│        ▼            ▼          │
+│  litellm :4000  harness-memd:37888 │
+│        │                        │
+│        ▼                        │
+│  postgres :5432                 │
+│                                │
+│    private Docker network      │
+└────────────────────────────────┘
+```
+
+- コンテナ間通信は **compose の service name** (`litellm`, `harness-memd`, `postgres`) を使用。
+- 公開 IP (`162.43.21.240`) や Tailscale IP (`100.92.131.75`) を内部通信に使わない。
 
 ## ポート・バインド一覧
 
-| サービス | ポート | バインド先 | アクセス元 | 認証 |
+| サービス | ポート | ホストへの publish | アクセス元 | 認証 |
 |---|---|---|---|---|
-| LiteLLM Proxy | 4000 | `0.0.0.0` | 全クライアント | `LITELLM_API_KEY` (仮想キー) |
-| harness-mem daemon | 37888 | `100.92.131.75` (Tailscaleのみ) | クライアント (Tailscale) | `HARNESS_MEM_ADMIN_TOKEN` |
-| harness-mem UI | 37901 | `100.92.131.75` (Tailscaleのみ) | クライアント (Tailscale) | — |
-| harness-mem MCP | 標準入出力 | ローカル | 各エージェント | — |
+| Caddy | 8090 | `100.92.131.75:8090` (Tailscaleのみ) | スマホ/クライアント (Tailscale) | Basic Auth (`luna`) |
+| opencode-server | 4096 | なし (compose 内のみ) | Caddy (reverse proxy) | Caddy が担当 |
+| LiteLLM Proxy | 4000 | なし* (compose 内のみ) | opencode (compose 内) | `LITELLM_API_KEY` (仮想キー) |
+| harness-mem daemon | 37888 | なし (compose 内のみ) | opencode (compose 内) | `HARNESS_MEM_ADMIN_TOKEN` |
+| harness-mem MCP | 標準入出力 | ローカル (コンテナ内) | opencode | — |
+| PostgreSQL | 5432 | なし (compose 内のみ) | litellm (compose 内) | `POSTGRES_PASSWORD` |
+
+\* 移行期間中のみ `127.0.0.1:4000` に bind (ホスト側 opencode からの接続用)。完全移行後は削除予定。
 
 ## 経路の分離
 
-```
-クライアント ──(公開インターネット / HTTP)──→ LiteLLM      :4000
-クライアント ──(Tailscale VPN / 暗号化)────→ harness-memd :37888
+```text
+スマホ/クライアント ──(Tailscale VPN)→ Caddy :8090 ──(basic auth)→ opencode-server :4096
+opencode-server ──(compose network)→ litellm :4000
+opencode-server ──(compose network)→ harness-memd :37888
+litellm ──(compose network)→ postgres :5432
 ```
 
-- **LiteLLM は「外から使う」ための入り口**。仮想キーがアクセス制御の役割。
-- **harness-mem は「内側だけ」のサービス**。Tailscale メッシュ越しのみ到達可能。
+- **LiteLLM / harness-mem / PostgreSQL はホストからは直接到達不可**。コンテナ内で完結。
+- **Caddy だけが外部境界**。Tailscale IP にのみ bind し、Basic Auth を強制する。
+- ホスト側 opencode (移行期間中) のみ `127.0.0.1:4000` 経由で LiteLLM に接続する。
 
 ## 変更時の確認コマンド
 
 ```bash
-# 実際のバインド先
-ss -tlnp | grep -E '37888|4000'
+# 実際のバインド先 (public に 4000/37888/5432/4096 が出ていないこと)
+ss -tlnp | grep -E '4000|37888|5432|4096|8090'
+
+# コンテナ状態
+cd ~/github/aktus-tk/ai-stack && docker compose ps
 
 # Tailscale 上のノード一覧
 tailscale status
 
-# 疎通確認
-curl -s -m 3 http://162.43.21.240:4000/v1/models -H "Authorization: Bearer $LITELLM_API_KEY"
-curl -s -m 3 http://100.92.131.75:37888/health
+# 入口 (Caddy) の疎通
+curl -s -m 3 -u 'luna:<password>' http://100.92.131.75:8090/global/health
+
+# 内部疎通 (compose 内から)
+docker compose exec harness-memd curl -s http://127.0.0.1:37888/health
 ```
+
+## 関連
+
+- 全体構成 → `compose.yaml`
+- 構築手順 → `runbooks/bootstrap-server.md`
+- 検証 → `scripts/verify.sh`
+- セキュリティ → `architecture/security.md`
