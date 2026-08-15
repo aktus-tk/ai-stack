@@ -73,9 +73,9 @@ else
 fi
 
 echo "== 3. harness-mem daemon 疎通 (harness-memd:37888) =="
-# 移行期間中は 127.0.0.1:37888 には bind していないため、コンテナ内から確認
-if docker compose exec -T harness-memd curl -s -m 5 http://127.0.0.1:37888/health 2>/dev/null | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
-  echo "[ok] harness-mem daemon healthy"
+# Tailscale IP 経由で確認 (自宅 opencode からの接続経路と同じ)
+if curl -s -m 5 http://100.92.131.75:37888/health 2>/dev/null | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+  echo "[ok] harness-mem daemon healthy (Tailscale IP)"
 else
   echo "[ng] harness-mem daemon unreachable"
   fail=1
@@ -98,7 +98,8 @@ fi
 
 echo "== 6. security boundary =="
 # 公開 bind (0.0.0.0 / 公開IP) に 4000/37888/5432/4096 が無いこと
-# 例外: litellm:4000 は Tailscale IP のみに bind (自宅 opencode 用) — ここでは 0.0.0.0 でなければ OK。
+# 例外: litellm:4000 / harness-memd:37888 は Tailscale IP のみに bind (自宅 opencode 用)。
+#       ここでは 0.0.0.0 でなければ OK。
 leaked=$(ss -tlnp 2>/dev/null | grep -E "0.0.0.0:(4000|37888|5432|4096)" || true)
 if [ -z "$leaked" ]; then
   echo "[ok] 4000/37888/5432/4096 は public (0.0.0.0) に露出していない"

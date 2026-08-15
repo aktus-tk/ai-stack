@@ -8,9 +8,9 @@
 #   opencode-server   スマホ/web クライアント用 headless サーバー
 #   caddy             Tailscale 経由の入口 (basic auth + reverse proxy)
 #
-# ポート方針: 4000 / 37888 / 5432 / 4096 は public へ publish しない。
-# Tailscale IP (100.92.131.75) への bind は自宅 opencode からの接続用。
-# caddy (100.92.131.75:<CADDY_PORT>) が唯一の外部入口。
+# ポート方針: public へ publish しない。Tailscale IP (100.92.131.75) への bind
+# (4000 / 37888) は自宅 opencode からの接続用。caddy (100.92.131.75:<CADDY_PORT>) が
+# 主要な外部入口。
 
 name: ai-stack
 
@@ -65,7 +65,9 @@ services:
     # bun は symlink (/opt/harness-mem) 経由の module 解決に失敗するため、
     # npm global の実パスを直接指定する
     command: ["bun", "run", "/usr/local/lib/node_modules/@chachamaru127/harness-mem/memory-server/src/index.ts"]
-    # ポートは公開しない
+    ports:
+      # 自宅 opencode から接続するため Tailscale IP に bind。
+      - 100.92.131.75:37888:37888
 
   opencode-server:
     build:

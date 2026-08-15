@@ -48,13 +48,13 @@
 | Caddy | 8090 | `100.92.131.75:8090` (Tailscaleのみ) | スマホ/クライアント (Tailscale) | Basic Auth (`luna`) |
 | opencode-server | 4096 | なし (compose 内のみ) | Caddy (reverse proxy) | Caddy が担当 |
 | LiteLLM Proxy | 4000 | `100.92.131.75:4000`* (Tailscaleのみ) | 自宅 opencode / compose 内 | `LITELLM_API_KEY` (仮想キー) |
-| harness-mem daemon | 37888 | なし (compose 内のみ) | opencode (compose 内) | `HARNESS_MEM_ADMIN_TOKEN` |
+| harness-mem daemon | 37888 | `100.92.131.75:37888`* (Tailscaleのみ) | 自宅 opencode / compose 内 | `HARNESS_MEM_ADMIN_TOKEN` |
 | harness-mem MCP | 標準入出力 | ローカル (コンテナ内) | opencode | — |
 | PostgreSQL | 5432 | なし (compose 内のみ) | litellm (compose 内) | `POSTGRES_PASSWORD` |
 
-\* 例外: 自宅の opencode から Tailscale 経由で直接接続するため、LiteLLM `4000` のみ
-  Tailscale IP (`100.92.131.75:4000`) に bind。Tailscale メッシュ + ログイン認証
-  (`LITELLM_API_KEY`) があるため public へは露出しない。
+\* 例外: 自宅の opencode から Tailscale 経由で直接接続するため、LiteLLM `4000` / harness-mem `37888`
+  を Tailscale IP (`100.92.131.75:4000`, `100.92.131.75:37888`) に bind。Tailscale メッシュ +
+  ログイン認証 (`LITELLM_API_KEY` / `HARNESS_MEM_ADMIN_TOKEN`) があるため public へは露出しない。
 
 ## 経路の分離
 
@@ -65,10 +65,10 @@ opencode-server ──(compose network)→ harness-memd :37888
 litellm ──(compose network)→ postgres :5432
 ```
 
-- **harness-mem / PostgreSQL はホストからは直接到達不可**。コンテナ内で完結。
+- **PostgreSQL はホストからは直接到達不可**。コンテナ内で完結。
 - **Caddy が主要な外部境界**。Tailscale IP にのみ bind し、Basic Auth を強制する。
-- **LiteLLM `4000` は例外として Tailscale IP に bind**。自宅 opencode から直接接続するための
-  専用入口で、`LITELLM_API_KEY` 認証により保護されている。
+- **LiteLLM `4000` / harness-mem `37888` は例外として Tailscale IP に bind**。自宅 opencode から
+  直接接続するための専用入口で、`LITELLM_API_KEY` / `HARNESS_MEM_ADMIN_TOKEN` 認証により保護されている。
 
 ## 変更時の確認コマンド
 
