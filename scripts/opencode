@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# opencode — Docker Compose 版 OpenCode CLI wrapper
+#
+# ホストに opencode をインストールせず、ai-stack の opencode image を
+# 都度起動する。現在のディレクトリを /workspace として mount する。
+#
+# 使い方:
+#   cd ~/github/project
+#   opencode
+#   opencode "Explain this codebase"
+#
+# 前提:
+#   - ~/github/aktus-tk/ai-stack に .env が存在する
+#   - docker compose が利用可能
+
+set -euo pipefail
+
+AI_STACK="${AI_STACK_DIR:-$HOME/github/aktus-tk/ai-stack}"
+ENV_FILE="${AI_STACK}/.env"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "[error] ${ENV_FILE} がありません。cp .env.example .env して設定してください" >&2
+  exit 1
+fi
+
+# 現在のディレクトリを workspace として起動
+exec docker compose \
+  -f "${AI_STACK}/compose.yaml" \
+  --env-file "$ENV_FILE" \
+  run --rm \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  opencode \
+  opencode \
+  "$@"

@@ -1,0 +1,146 @@
+# ai-stack compose.yaml
+# サーバー上の AI 関連コンポーネントをすべて Docker Compose で管理する。
+#
+#   postgres          LiteLLM 用 PostgreSQL (既存 volume 再利用)
+#   litellm           LLM ゲートウェイ
+#   harness-memd      harness-mem 記憶 daemon
+#   opencode          CLI (都度 run)
+#   opencode-server   スマホ/web クライアント用 headless サーバー
+#   caddy             Tailscale 経由の入口 (basic auth + reverse proxy)
+#
+# ポート方針: 4000 / 37888 / 5432 / 4096 は public へ publish しない。
+# 唯一の入口は caddy (100.92.131.75:<CADDY_PORT>)。
+# 移行期間中のみ litellm を 127.0.0.1:4000 に bind (ホスト側 opencode からの接続用)。
+# 完全移行後はこの bind を削除する。
+
+name: ai-stack
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: litellm
+    volumes:
+      # 既存 LiteLLM のデータを引き継ぐ (litellm compose が持つ volume)
+      - litellm_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # ポートは公開しない
+
+  litellm:
+    image: docker.litellm.ai/berriai/litellm-database:${LITELLM_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:4000:4000
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set in .env}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?set in .env}
+      UI_USERNAME: ${UI_USERNAME:-admin}
+      UI_PASSWORD: ${UI_PASSWORD:?set in .env}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@postgres:5432/litellm
+      STORE_MODEL_IN_DB: "True"
+    # 移行期間中: ホスト側 opencode (旧 CLI/web) から接続するため localhost のみ公開。
+    # 完全移行後はこの ports を削除する (compose 内の service name でアクセス)。
+
+  harness-memd:
+    build:
+      context: .
+      dockerfile: docker/opencode/Dockerfile
+    restart: unless-stopped
+    environment:
+      HARNESS_MEM_HOST: 0.0.0.0
+      HARNESS_MEM_PORT: "37888"
+      HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
+      HARNESS_MEM_HOME: /home/tk/.harness-mem
+    volumes:
+      # 既存の記憶 DB を引き継ぐ
+      - /home/tk/.harness-mem:/home/tk/.harness-mem
+    # bun は symlink (/opt/harness-mem) 経由の module 解決に失敗するため、
+    # npm global の実パスを直接指定する
+    command: ["bun", "run", "/usr/local/lib/node_modules/@chachamaru127/harness-mem/memory-server/src/index.ts"]
+    # ポートは公開しない
+
+  opencode-server:
+    build:
+      context: .
+      dockerfile: docker/opencode/Dockerfile
+    restart: unless-stopped
+    working_dir: /workspace
+    environment:
+      LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
+      HARNESS_MEM_HOST: harness-memd
+      HARNESS_MEM_PORT: "37888"
+      HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
+      OPENCODE_CONFIG: /etc/opencode/opencode.json
+      # ヘッドレスなのでブラウザ自動起動を無効化
+      BROWSER: /bin/true
+    volumes:
+      - /home/tk/.local/share/opencode:/home/tk/.local/share/opencode
+      - /home/tk/.config/opencode:/home/tk/.config/opencode
+      - ./config/opencode/opencode.json:/etc/opencode/opencode.json:ro
+      - /home/tk/backups:/home/tk/backups:ro
+    command: ["opencode", "web", "--hostname", "0.0.0.0", "--port", "4096"]
+    depends_on:
+      litellm:
+        condition: service_started
+      harness-memd:
+        condition: service_started
+    # ポートは公開しない (caddy 経由のみ)
+
+  opencode:
+    build:
+      context: .
+      dockerfile: docker/opencode/Dockerfile
+    profiles: ["cli"]
+    working_dir: /workspace
+    environment:
+      LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
+      HARNESS_MEM_HOST: harness-memd
+      HARNESS_MEM_PORT: "37888"
+      HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
+      OPENCODE_CONFIG: /etc/opencode/opencode.json
+      BROWSER: /bin/true
+    volumes:
+      - /home/tk/.local/share/opencode:/home/tk/.local/share/opencode
+      - /home/tk/.config/opencode:/home/tk/.config/opencode
+      #- opencode_data:/home/tk/.local/share/opencode
+      #- opencode_config:/home/tk/.config/opencode
+      - ./config/opencode/opencode.json:/etc/opencode/opencode.json:ro
+      - /home/tk/backups:/home/tk/backups:ro
+    depends_on:
+      litellm:
+        condition: service_started
+      harness-memd:
+        condition: service_started
+
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    depends_on:
+      - opencode-server
+    ports:
+      # Tailscale IP にのみ bind (public には露出しない)
+      - "${CADDY_BIND_IP:-100.92.131.75}:${CADDY_PORT:-8090}:80"
+    environment:
+      BASIC_AUTH_USER: ${CADDY_BASIC_AUTH_USER:-opencode}
+      BASIC_AUTH_HASH: ${CADDY_BASIC_AUTH_HASH:?set in .env}
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    # 唯一の外部入口
+
+volumes:
+  litellm_postgres_data:
+    # 既存 litellm compose の volume を再利用
+    external: true
+    name: litellm_postgres_data
+#  opencode_data:
+#  opencode_config:

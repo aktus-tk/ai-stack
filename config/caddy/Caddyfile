@@ -1,0 +1,16 @@
+# ai-stack Caddyfile
+# opencode-server への入口。basic auth を付けて reverse proxy する。
+# listen は compose.yaml で Tailscale IP のみに bind (100.92.131.75:<CADDY_PORT>)。
+#
+# basic auth のハッシュは以下で生成して .env の CADDY_BASIC_AUTH_HASH に設定する:
+#   docker run --rm caddy:2 caddy hash-password --plaintext '<password>'
+
+:80 {
+	@protected {
+		not path /global/health
+	}
+	basic_auth @protected {
+		{$BASIC_AUTH_USER:opencode} {$BASIC_AUTH_HASH}
+	}
+	reverse_proxy opencode-server:4096
+}

@@ -1,60 +1,109 @@
 #!/usr/bin/env bash
-# verify.sh — 環境の健全性チェック
+# verify.sh — ai-stack (Docker Compose) 環境の健全性チェック
 #
 # 検証項目:
-#   1. LiteLLM への疎通 (/v1/models)
-#   2. harness-mem daemon への疎通 (/health)
-#   3. harness-mem DB の整合性 (integrity_check)
-#   4. harness-mem DB の観測件数
+#   1. コンテナ稼働状態 (postgres/litellm/harness-memd/opencode-server/caddy)
+#   2. LiteLLM への疎通 (compose 内 litellm:4000 → /v1/models)
+#   3. harness-mem daemon への疎通 (compose 内 harness-memd:37888 → /health)
+#   4. harness-mem DB の整合性 (integrity_check)
+#   5. Caddy (Tailscale 経由の入口) の basic auth
+#   6. security boundary: 公開ポートが意図したものだけであること
 #
 # 使い方:
-#   ./scripts/verify.sh            # クライアント側 (env から)
-#   HARNESS_MEM_HOST=... ./scripts/verify.sh
+#   ./scripts/verify.sh                # サーバー上で実行
+#   ./scripts/verify.sh --quick        # コンテナ状態と疎通のみ
+#
+# 前提:
+#   - ai-stack ディレクトリに .env が存在
+#   - docker compose が利用可能
 
 set -euo pipefail
 
-SERVER_HOST="${HARNESS_MEM_HOST:-100.92.131.75}"
-SERVER_PORT="${HARNESS_MEM_PORT:-37888}"
-LITELLM_URL="${LITELLM_URL:-http://162.43.21.240:4000/v1}"
+AI_STACK="${AI_STACK_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+ENV_FILE="${AI_STACK}/.env"
+QUICK="${1:-}"
 
 fail=0
 
-echo "== 1. LiteLLM =="
-if [ -n "${LITELLM_API_KEY:-}" ]; then
-  code=$(curl -s -m 5 -o /dev/null -w "%{http_code}" \
-    "${LITELLM_URL}/models" -H "Authorization: Bearer ${LITELLM_API_KEY}" || echo 000)
-  if [ "$code" = "200" ]; then
-    echo "[ok] LiteLLM reachable (${LITELLM_URL})"
-  else
-    echo "[ng] LiteLLM http=${code}"
-    fail=1
-  fi
-else
-  echo "[skip] LITELLM_API_KEY 未設定"
+cd "$AI_STACK"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "[error] ${ENV_FILE} がありません" >&2
+  exit 1
 fi
 
-echo "== 2. harness-mem daemon (${SERVER_HOST}:${SERVER_PORT}) =="
-if curl -s -m 5 "${SERVER_HOST}:${SERVER_PORT}/health" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+# .env から値を読み込む (source せずパース: bcrypt 等の $ 混在を避ける)
+parse_env() {
+  while IFS='=' read -r key value; do
+    case "$key" in
+      ''|\#*) continue ;;
+      *) export "$key=${value%$'\r'}" ;;
+    esac
+  done < "$ENV_FILE"
+}
+parse_env
+
+echo "== 1. コンテナ稼働状態 =="
+services=(postgres litellm harness-memd opencode-server caddy)
+for svc in "${services[@]}"; do
+  state=$(docker compose ps --status running --format '{{.Name}} {{.State}}' "$svc" 2>/dev/null || true)
+  if [ -n "$state" ]; then
+    echo "[ok] ${svc} running"
+  else
+    echo "[ng] ${svc} not running"
+    fail=1
+  fi
+done
+
+if [ "$QUICK" = "--quick" ]; then
+  if [ "$fail" -eq 0 ]; then echo "== 結果: すべて OK =="; else echo "== 結果: 問題あり =="; fi
+  exit $fail
+fi
+
+echo "== 2. LiteLLM 疎通 =="
+# 移行期間中は 127.0.0.1:4000 に bind している。完全移行後は litellm:4000 で直接確認。
+LITELLM_HOST="${LITELLM_VERIFY_URL:-http://127.0.0.1:4000}"
+code=$(curl -s -o /dev/null -w "%{http_code}" -m 5 \
+  "${LITELLM_HOST}/v1/models" -H "Authorization: Bearer ${LITELLM_API_KEY}" || echo 000)
+if [ "$code" = "200" ]; then
+  echo "[ok] LiteLLM reachable (http ${code})"
+else
+  echo "[ng] LiteLLM http=${code}"
+  fail=1
+fi
+
+echo "== 3. harness-mem daemon 疎通 (harness-memd:37888) =="
+# 移行期間中は 127.0.0.1:37888 には bind していないため、コンテナ内から確認
+if docker compose exec -T harness-memd curl -s -m 5 http://127.0.0.1:37888/health 2>/dev/null | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
   echo "[ok] harness-mem daemon healthy"
 else
   echo "[ng] harness-mem daemon unreachable"
   fail=1
 fi
 
-echo "== 3. harness-mem DB integrity =="
-if command -v ssh >/dev/null 2>&1 && ssh -o ConnectTimeout=5 x \
-  "sqlite3 ~/.harness-mem/harness-mem.db 'PRAGMA integrity_check;'" 2>/dev/null | grep -q '^ok$'; then
-  echo "[ok] DB integrity ok (via ssh x)"
+echo "== 4. harness-mem DB integrity =="
+if command -v sqlite3 >/dev/null 2>&1 && sqlite3 /home/tk/.harness-mem/harness-mem.db "PRAGMA integrity_check;" 2>/dev/null | grep -q '^ok$'; then
+  obs=$(sqlite3 /home/tk/.harness-mem/harness-mem.db "SELECT count(*) FROM mem_observations;" 2>/dev/null)
+  echo "[ok] DB integrity ok (observations=${obs})"
 else
-  echo "[warn] ssh x 経由の DB チェック失敗 (スキップ)"
+  echo "[warn] DB integrity チェック失敗 (sqlite3 なし or DB 読めず)"
 fi
 
-echo "== 4. harness-mem observation count =="
-if ssh -o ConnectTimeout=5 x \
-  "sqlite3 ~/.harness-mem/harness-mem.db 'SELECT count(*) FROM mem_observations;'" 2>/dev/null | grep -qE '^[0-9]+$'; then
-  echo "[ok] observations=$(ssh x 'sqlite3 ~/.harness-mem/harness-mem.db \"SELECT count(*) FROM mem_observations;\"' 2>/dev/null)"
+echo "== 5. Caddy basic auth (100.92.131.75:${CADDY_PORT:-8090}) =="
+if curl -s -o /dev/null -w "%{http_code}" -m 5 "http://100.92.131.75:${CADDY_PORT:-8090}/" | grep -q "^401$"; then
+  echo "[ok] Caddy requires auth (401 without credentials)"
 else
-  echo "[warn] 件数取得失敗 (スキップ)"
+  echo "[warn] Caddy 未認証応答が 401 でない (要確認)"
+fi
+
+echo "== 6. security boundary =="
+# 公開 bind (0.0.0.0 / 公開IP) に 4000/37888/5432/4096 が無いこと
+leaked=$(ss -tlnp 2>/dev/null | grep -E "0.0.0.0:(4000|37888|5432|4096)" || true)
+if [ -z "$leaked" ]; then
+  echo "[ok] 4000/37888/5432/4096 は public に露出していない"
+else
+  echo "[ng] 公開ポート漏れ: ${leaked}"
+  fail=1
 fi
 
 if [ "$fail" -eq 0 ]; then

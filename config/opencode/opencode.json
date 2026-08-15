@@ -1,0 +1,35 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
+      "options": {
+        "baseURL": "http://litellm:4000/v1",
+        "apiKey": "{env:LITELLM_API_KEY}"
+      },
+      "models": {
+        "deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash"
+        }
+      }
+    }
+  },
+
+  "mcp": {
+    "harness": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "/opt/harness-mem/current/bin/harness-mcp-server"
+      ],
+      "environment": {
+        "HARNESS_MEM_HOST": "{env:HARNESS_MEM_HOST}",
+        "HARNESS_MEM_PORT": "{env:HARNESS_MEM_PORT}",
+        "HARNESS_MEM_ADMIN_TOKEN": "{env:HARNESS_MEM_ADMIN_TOKEN}",
+        "HARNESS_MEM_MCP_PLATFORM": "opencode"
+      }
+    }
+  }
+}

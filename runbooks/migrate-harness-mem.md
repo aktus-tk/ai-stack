@@ -1,66 +1,89 @@
-# Runbook: harness-mem の移行 (migrate-harness-mem)
+# Runbook: harness-mem の Docker Compose 移行
 
-ローカル (クライアント) で稼働していた harness-mem の SQLite DB を
-中央サーバーの daemon に移行する手順。2026-08-14 に実行実績あり。
+システム運用を systemd から ai-stack Compose へ移行する手順。
+2026-08-15 に実行実績あり (systemd → Docker 移行完了)。
 
 ## 背景
 
-- ローカル: `~/.harness-mem/harness-mem.db` (WAL モード)
-- 移行先: サーバー `ssh x` の `~/.harness-mem/harness-mem.db`
+- 旧: `harness-memd.service` (systemd) が `~/.harness-mem` の SQLite DB を管理
+- 新: `compose.yaml` の `harness-memd` service が同一 DB を bind mount で管理
 
 ## 重要な注意
 
-- DB は **WAL モード**。`harness-mem.db` だけコピーすると WAL 内の未コミット書き込みが
-  抜けて古い状態になる。**稼働中のファイルを直接コピーしない**こと。
-- 両端の daemon を止めるか、`VACUUM INTO` で一貫スナップショットを作る。
-- サーバーに既存データがある場合はバックアップを先に取る。
+- **systemd と Docker の両方が同じ DB を開いてはいけない** (SQLite 破損の恐れ)。
+  必ず片方だけ起動する。
+- DB は **WAL モード**。バックアップは `VACUUM INTO` で一貫スナップショットを取る。
 
 ## 手順
 
-### 1. ローカルで一貫スナップショット作成 (daemon 停止不要)
+### 1. バックアップ (VACUUM INTO)
 
 ```bash
-sqlite3 ~/.harness-mem/harness-mem.db "VACUUM INTO '/tmp/harness-mem-migrate.db';"
-sqlite3 /tmp/harness-mem-migrate.db "PRAGMA integrity_check;"   # → ok
+mkdir -p /home/tk/backups/harness-mem
+sqlite3 ~/.harness-mem/harness-mem.db \
+  "VACUUM INTO '/home/tk/backups/harness-mem/pre-docker-migrate.db'"
+sqlite3 /home/tk/backups/harness-mem/pre-docker-migrate.db "PRAGMA integrity_check;"
 ```
 
-`VACUUM INTO` は WAL 込みの一貫スナップショットを1ファイルに固める。
-
-### 2. リモート daemon 停止 → 既存DB退避
+### 2. systemd harness-memd 停止
 
 ```bash
-ssh x '~/.volta/bin/harness-memd stop'
-ssh x 'cp ~/.harness-mem/harness-mem.db ~/.harness-mem/harness-mem.db.bak-$(date +%Y%m%d)'
-ssh x 'rm -f ~/.harness-mem/harness-mem.db-wal ~/.harness-mem/harness-mem.db-shm'
+sudo systemctl stop harness-memd
+sudo systemctl disable harness-memd
 ```
 
-### 3. 転送・置換
+プロセスが残っていないこと:
 
 ```bash
-scp /tmp/harness-mem-migrate.db x:~/.harness-mem/harness-mem.db
+ps aux | grep -E "harness-memd|memory-server" | grep -v grep
 ```
 
-### 4. 起動・検証
+### 3. compose の harness-memd 起動
 
 ```bash
-# PATH に bun / volta を通す (非ログインSSHでは通らないため)
-ssh x 'export PATH="$HOME/.bun/bin:$HOME/.volta/bin:$PATH"; harness-memd start'
-
-# 件数・整合性チェック
-ssh x "sqlite3 -header -column ~/.harness-mem/harness-mem.db \
-  'SELECT (SELECT count(*) FROM mem_observations) AS obs, \
-          (SELECT count(*) FROM mem_sessions) AS sessions, \
-          (SELECT count(*) FROM mem_facts) AS facts;'"
-ssh x 'sqlite3 ~/.harness-mem/harness-mem.db "PRAGMA integrity_check;"'
+cd ~/github/aktus-tk/ai-stack
+docker compose up -d harness-memd
 ```
 
-移行前後の件数が一致することを確認。
+### 4. 検証
 
-## ローカル側の後始末
+```bash
+# compose 内から health 確認
+docker run --rm --network ai-stack_default \
+  curlimages/curl -s http://harness-memd:37888/health
 
-移行後、ローカル daemon を止めるか、残すかは用途による。
-ローカルにも同じ DB があるので、記憶は二重に存在する。
+# DB 整合性・件数 (ホストから)
+sqlite3 ~/.harness-mem/harness-mem.db "PRAGMA integrity_check;"
+sqlite3 -header -column ~/.harness-mem/harness-mem.db \
+  'SELECT (SELECT count(*) FROM mem_observations) AS obs,
+          (SELECT count(*) FROM mem_sessions) AS sessions,
+          (SELECT count(*) FROM mem_facts) AS facts;'
+```
+
+移行前後の件数が一致すること。
+
+### 5. 全体検証
+
+```bash
+cd ~/github/aktus-tk/ai-stack && ./scripts/verify.sh
+```
+
+## Rollback
+
+```bash
+docker compose stop harness-memd
+sudo systemctl start harness-memd
+```
+
+## 補足
+
+- compose の `harness-memd` は `HARNESS_MEM_HOME=/home/tk/.harness-mem` で
+  DB を bind mount する。
+- memory daemon 起動は `bun run .../memory-server/src/index.ts` (npm global の実パス)。
+  `/opt/harness-mem` (symlink) 経由だと bun が module 解決に失敗するため実パス指定。
 
 ## 関連
 
-- 移行後に推奨される Granite embedding 切替 → `skills/harness-mem/SKILL.md`
+- 全体構成 → `compose.yaml`
+- 検証 → `scripts/verify.sh`
+- Granite embedding 切替 (推奨・未実施) → `skills/harness-mem/SKILL.md`

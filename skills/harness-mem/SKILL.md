@@ -6,19 +6,22 @@ harness-mem の記憶 DB・daemon を扱うための運用知識。
 
 1. **稼働中の DB を直接コピーしない** — SQLite は WAL モード。`db` だけコピーすると
    WAL 内の書き込みが消える。必ず `VACUUM INTO` で一貫スナップショットを取る。
-2. **daemon を別の場所で二重起動しない** — ポート 37888 は単一 daemon が使用。
-   systemd で管理されている。
-3. **bind 先を勝手に `0.0.0.0` にしない** — 現状 Tailscale IP のみにバインド。
-   公開バインドすると攻撃面が増える。必要な場合は必ず認証設定と合わせること。
-4. **`--reset` 付きバックフィルは検索精度が一時低下する** — 全ベクトル再計算のため。
+2. **systemd と Docker の daemon を同時起動しない** — 同一 SQLite DB を共有するため。
+   移行は `runbooks/migrate-harness-mem.md` の手順に従う。
+3. **daemon の起動コマンドは npm global の実パスで指定** — `/opt/harness-mem` (symlink)
+   経由だと bun が module 解決に失敗する。実パス
+   `/usr/local/lib/node_modules/@chachamaru127/harness-mem/memory-server/src/index.ts` を使う。
+4. **bind 先を勝手に `0.0.0.0` (ホスト公開) にしない** — compose 内では `0.0.0.0` だが
+   ホストへ publish しない。公開バインドすると攻撃面が増える。
+5. **`--reset` 付きバックフィルは検索精度が一時低下する** — 全ベクトル再計算のため。
    影響範囲を理解してから実行する。
 
 ## 構成
 
-- daemon: systemd ユニット `harness-memd.service` (サーバー)
+- daemon: compose `harness-memd` (ai-stack)
 - DB: `~/.harness-mem/harness-mem.db` (WAL)
 - ログ: `~/.harness-mem/daemon.log`, `harness-mem-ui.log`
-- バインド: `100.92.131.75:37888` (Tailscale) / UI `37901`
+- バインド: compose 内 `harness-memd:37888` (ホストへは publish しない)
 - 認証: `HARNESS_MEM_ADMIN_TOKEN` (Bearer)。ただし 401 強制は config.json の
   `auth` セクション設定時のみ (詳細は architecture/security.md)
 
@@ -26,17 +29,17 @@ harness-mem の記憶 DB・daemon を扱うための運用知識。
 
 ```bash
 # 状態確認
-ssh x 'systemctl status harness-memd'
-curl -s http://100.92.131.75:37888/health
+cd ~/github/aktus-tk/ai-stack && docker compose ps
+docker compose exec harness-memd curl -s http://127.0.0.1:37888/health
 
 # 再起動
-ssh x 'sudo systemctl restart harness-memd'
+cd ~/github/aktus-tk/ai-stack && docker compose restart harness-memd
 
-# DB 件数確認
-ssh x "sqlite3 ~/.harness-mem/harness-mem.db \
+# DB 件数確認 (ホストから)
+sqlite3 ~/.harness-mem/harness-mem.db \
   'SELECT (SELECT count(*) FROM mem_observations) AS obs, \
           (SELECT count(*) FROM mem_sessions) AS sessions, \
-          (SELECT count(*) FROM mem_facts) AS facts;'"
+          (SELECT count(*) FROM mem_facts) AS facts;'
 ```
 
 ## バックアップ

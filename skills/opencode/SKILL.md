@@ -1,35 +1,53 @@
 # Skill: opencode 運用
 
 opencode (対話型 AI エージェント CLI) の設定と運用知識。
+2026-08-15 以降、CLI / Server は **Docker Compose (`ai-stack`)** で運用する。
+
+## 実行方法 (Docker 版)
+
+```bash
+# PATH に ai-stack の scripts を追加
+export PATH="$HOME/github/aktus-tk/ai-stack/scripts:$PATH"
+
+# どのディレクトリでも起動 (現在 dir が /workspace として mount)
+cd ~/github/project
+opencode
+```
+
+- ホストに opencode をインストールせず、image `ai-stack-opencode` を都度起動する。
+- セッションは `~/.local/share/opencode` (bind mount) に保存され、CLI/Server 間で共有される。
+- モデル・MCP 設定は `config/opencode/opencode.json` (compose 内 service name 参照)。
 
 ## 設定ファイル
 
 | ファイル | 役割 |
 |---|---|
-| `~/.config/opencode/opencode.json` | プロバイダー・モデル・MCP 設定 |
-| `~/.config/opencode/tui.json` | TUI 表示・マウス・テーマ設定 |
+| `config/opencode/opencode.json` | プロバイダー・モデル・MCP 設定 (compose 内 mount) |
+| `docker/opencode/Dockerfile` | opencode + harness-mem MCP を含む image |
+| `scripts/opencode` | CLI 起動 wrapper |
 
 ## 何を壊してはいけないか
 
 1. **`${env:XXX}` 参照を維持する** — シークレットは環境変数経由。実値を直書きしない。
-2. **WSL + mouse 選択の問題** — opencode はマウスイベントを捕捉するため、ターミナルの
-   マウス選択コピーが効かなくなる。`tui.json` の `"mouse": false` で無効化できる
-   (キーボード操作は全て機能する)。設定変更は再起動で反映。
-3. **MCP 環境変数は daemon の接続先と一致させる** — リモート daemon を使う場合は
-   `HARNESS_MEM_HOST` を Tailscale IP に、`HARNESS_MEM_ADMIN_TOKEN` をサーバーと揃える。
+2. **Dockerfile に `ENTRYPOINT` を設定しない** — opencode (CLI/Server) と harness-memd の
+   両方を同一 image から起動するため、compose の `command` で実行コマンドを指定する。
+   `ENTRYPOINT ["opencode"]` があると harness-memd の `command` が上書きされ破壊する。
+3. **コンテナの `HOME` は `/home/tk`** — opencode のデータ (`~/.local/share/opencode`) を
+   bind mount と一致させるため。`HOME=/root` だとセッション引継ぎが効かなくなる。
+4. **WSL + mouse 選択の問題** — opencode はマウスイベントを捕捉するため、ターミナルの
+   マウス選択コピーが効かなくなる。`tui.json` の `"mouse": false` で無効化できる。
+5. **MCP 環境変数は daemon の接続先と一致させる** — compose 内では `HARNESS_MEM_HOST=harness-memd`。
 
 ## モデル切り替え
 
 - TUI 内で `/models` → モデル選択
-- 設定ファイルの `provider.litellm.models` に追加されたモデルが候補に現れる
+- `config/opencode/opencode.json` の `provider.litellm.models` に追加されたモデルが候補に現れる
 
 ## セッションについて
 
-- 会話は opencode 自身のストレージ (`~/.local/share/opencode/storage/`) に保存。
-  再起動後はセッション一覧から復元 (`opencode --continue` も可)。
-- harness-mem が記憶レイヤーを担う。opencode の履歴は
-  `HARNESS_MEM_OPENCODE_DB_PATH` (`~/.local/share/opencode/opencode.db`) から
-  daemon が自動取り込みする (`opencode_history_ingest: true`)。
+- 会話は `~/.local/share/opencode/opencode.db` (bind mount) に保存。
+  再起動後は `opencode --continue` かセッション一覧から復元。
+- harness-mem が記憶レイヤーを担う。opencode の履歴は daemon が自動取り込みする。
 
 ## TUI と tmux スクロール
 
@@ -96,27 +114,29 @@ if (compaction.auto !== false
   残る。必要なら harness-mem を検索して復元する。
 - `prune` 有効時は古いツール出力が捨てられ、`skill` 系ツールは保護対象。
 
-## モバイル / リモート接続 (opencode web)
+## モバイル / リモート接続 (opencode server)
 
-サーバー上で `opencode-web.service` (systemd) が headless サーバーを常駐させる。
-ブラウザやモバイルクライアントから接続する。
+ai-stack compose の `opencode-server` が headless サーバーを常駐させ、
+Caddy が唯一の入口として受け付ける。
 
 - **モバイルクライアント**: OpenClient for OpenCode
   (App Store: `https://apps.apple.com/jp/app/openclient-for-opencode/id6763641767`)
-  - サーバー設定に `http://100.92.131.75:4096` を指定する
-- **接続先**: `http://100.92.131.75:4096` (Tailscale IP にのみバインド)
-- **認証**: なし (Tailscale 内のみバインドのため basic auth は無効化)
-- **systemd**: `ssh x 'sudo systemctl status opencode-web'`
-- **unit 例**: `config/server/systemd/opencode-web.service`
+  - サーバー設定に **`http://100.92.131.75:8090`** を指定する
+- **接続先**: `http://100.92.131.75:8090` (Caddy, Tailscale IP のみ bind)
+- **認証**: basic auth (`CADDY_BASIC_AUTH_USER` / パスワード)
+- **経路**: Smartphone → Tailscale → Caddy(8090, basic auth) → opencode-server(4096, compose 内)
+- **状態確認**: `docker compose ps`, `docker logs ai-stack-opencode-server-1`
 
 ### 注意
 
 - `opencode web` は plain HTTP サーバーのため、`https://` では接続できない。
   `http://` を指定すること。
 - ブラウザ自動起動 (`xdg-open`) のエラーはヘッドレス環境では無害。
+- Caddy の basic auth ハッシュは `caddy hash-password` で生成し `.env` の
+  `CADDY_BASIC_AUTH_HASH` に設定する。
 
 ## 関連
 
 - クライアント構築 → `runbooks/bootstrap-client.md`
 - サーバー構築 → `runbooks/bootstrap-server.md`
-- 設定例 → `config/client/opencode.json.example`
+- 設定例 → `config/opencode/opencode.json`
