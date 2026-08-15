@@ -23,13 +23,16 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-# 現在のディレクトリを workspace として起動
+# 現在のディレクトリを workspace として起動。
+# コンテナ内でもホストと同じ絶対パスに見せることで、
+# opencode のセッション (directory ベース) をホストと共有する。
+# (例: /home/tk/opencode → コンテナ内でも /home/tk/opencode)
 exec docker compose \
   -f "${AI_STACK}/compose.yaml" \
   --env-file "$ENV_FILE" \
   run --rm \
-  -v "$PWD:/workspace" \
-  -w /workspace \
+  -v "$PWD:$PWD" \
+  -w "$PWD" \
   opencode \
   opencode \
   "$@"

@@ -60,3 +60,46 @@ IaC(Terraform)にすべてを寄せず、「意図 + コード」として環境
 
 サーバー (162.43.21.240) の構築は `runbooks/bootstrap-server.md` を参照。
 クライアントのセットアップは `runbooks/bootstrap-client.md` を参照。
+
+## opencode への接続方法
+
+opencode は **ホスト直接起動** と **Docker コンテナ経由** の2通りで使える。
+
+### 1. ホスト直接起動
+
+サーバー上にインストールされた opencode をそのまま実行する。
+
+```bash
+cd ~/opencode
+opencode -s ses_0003192c2ffeF50ENtS1FVeRVX   # 特定セッションを継続
+opencode                                    # 新規/セッション選択
+```
+
+- モデル・MCP は `~/.config/opencode/opencode.json` を参照
+  (LiteLLM は移行期間中のため `http://127.0.0.1:4000/v1` で接続)
+- セッションは `~/.local/share/opencode/opencode.db` に保存
+
+### 2. Docker コンテナ経由 (推奨)
+
+```bash
+/home/tk/github/aktus-tk/ai-stack/scripts/opencode   # 直接実行
+# または PATH に追加して
+export PATH="$HOME/github/aktus-tk/ai-stack/scripts:$PATH"
+opencode                                        # どのディレクトリからでも起動
+```
+
+- 現在のディレクトリがそのままコンテナの workspace として mount される
+  (ホストと同じ絶対パスで見せるため、セッション引継ぎが機能する)
+- セッションは `~/.local/share/opencode/opencode.db` (bind mount) に保存され、
+  ホスト直起動と**同じ DB を共有**する
+- モデル・MCP は `config/opencode/opencode.json` を参照
+  (compose 内の service name `litellm:4000` / `harness-memd:37888` で接続)
+- 初回は image ビルドが必要: `docker compose build opencode`
+
+### セッション引継ぎのポイント
+
+- opencode はセッションを **作業ディレクトリ (directory) ベース**で区別する。
+- wrapper は `-v "$PWD:$PWD" -w "$PWD"` でコンテナ内でもホストと同じ絶対パスを
+  維持するため、ホスト直起動で作ったセッションをコンテナからも継続できる。
+- 逆に `-w /workspace` のような相対マウントにすると別セッション扱いになり
+  引継ぎが効かない (修正前のバグ)。
