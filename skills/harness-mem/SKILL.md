@@ -91,9 +91,18 @@ curl -s http://100.92.131.75:37888/v1/metrics -H "Authorization: Bearer $HARNESS
   - token 節約: 直接効果なし (embedding は LLM に送られない) が、検索精度↑ による
     不要観測の返却減と、dedupe/統合精度↑ による観測総数減の間接効果がある。
 - モデル選択: データは日本語中心のため、多言語モデルが望ましい。
-  - `multilingual-e5` (多言語, dim=384) — 現在 config が参照中のモデル
-  - `granite-embedding-311m-r2` (日本語クロスリンガル 0.54 → 0.96 / 複合スコア +0.20)
-  - `ruri-v3-30m` (日本語特化, dim=256) — 日本語のみなら有力候補
+  - `granite-embedding-311m-r2` — **最上位 (推奨)**。harness-mem カタログ内の
+    `granite-embedding-311m-r2` は IBM `granite-embedding-311m-multilingual-r2`
+    (311M / dim=768、Matryoshka で 512/384/256/128 に縮小可) の ONNX 版を指す。
+    多言語 200+ (52言語強化 + コード)。MTEB 多言語 Retrieval 65.2 / AVG 56.3
+    (旧 278m 比 +13 / +14.5)。日本語クロスリンガル 0.54 → 0.96 / 複合スコア +0.20。
+    `@384` は 768→384 への Matryoshka 縮小指定で、下記手順と整合。
+  - `granite-embedding-97m-multilingual-r2` — 軽量代替 (97M / dim=384)。
+    311M の約3分の1サイズ・約3倍速で品質は MTEB 60.3 (300M 級に匹敵)。
+    精度優先なら 311M、速度/容量優先なら 97M。
+  - `multilingual-e5` (多言語, dim=384) — MTEB 50.9。granite 311M R2 比 約14pt 劣る。
+    現在 config が参照中のモデル (未インストール)。
+  - `ruri-v3-30m` (日本語特化, dim=256) — 日本語のみなら有力候補。
 - 注意: `--reset` で全ベクトル再計算。移行中は検索精度が一時低下。
 
 ```bash
