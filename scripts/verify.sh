@@ -2,10 +2,11 @@
 # verify.sh — ai-stack (Docker Compose) 環境の健全性チェック
 #
 # 検証項目:
-#   1. コンテナ稼働状態 (postgres/litellm/harness-memd/opencode-server/caddy)
+#   1. コンテナ稼働状態 (postgres/litellm/harness-memd/harness-memd-working/opencode-server/caddy)
 #   2. LiteLLM への疎通 (compose 内 litellm:4000 → /v1/models)
 #   3. harness-mem daemon への疎通 (compose 内 harness-memd:37888 → /health)
-#   4. harness-mem DB の整合性 (integrity_check)
+#   3b. harness-mem working daemon への疎通 (37889 → /health)
+#   4. harness-mem DB の整合性 (main / working の integrity_check)
 #   5. Caddy (Tailscale 経由の入口) の basic auth
 #   6. security boundary: 公開ポートが意図したものだけであること
 #
@@ -44,7 +45,7 @@ parse_env() {
 parse_env
 
 echo "== 1. コンテナ稼働状態 =="
-services=(postgres litellm harness-memd opencode-server caddy)
+services=(postgres litellm harness-memd harness-memd-working opencode-server caddy)
 for svc in "${services[@]}"; do
   state=$(docker compose ps --status running --format '{{.Name}} {{.State}}' "$svc" 2>/dev/null || true)
   if [ -n "$state" ]; then
@@ -81,12 +82,30 @@ else
   fail=1
 fi
 
+echo "== 3b. harness-mem working daemon 疎通 (harness-memd-working:37889) =="
+if curl -s -m 5 http://100.92.131.75:37889/health 2>/dev/null | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+  echo "[ok] harness-mem working daemon healthy (Tailscale IP)"
+else
+  echo "[ng] harness-mem working daemon unreachable"
+  fail=1
+fi
+
 echo "== 4. harness-mem DB integrity =="
 if command -v sqlite3 >/dev/null 2>&1 && sqlite3 /home/tk/.harness-mem/harness-mem.db "PRAGMA integrity_check;" 2>/dev/null | grep -q '^ok$'; then
   obs=$(sqlite3 /home/tk/.harness-mem/harness-mem.db "SELECT count(*) FROM mem_observations;" 2>/dev/null)
-  echo "[ok] DB integrity ok (observations=${obs})"
+  echo "[ok] main DB integrity ok (observations=${obs})"
 else
-  echo "[warn] DB integrity チェック失敗 (sqlite3 なし or DB 読めず)"
+  echo "[warn] main DB integrity チェック失敗 (sqlite3 なし or DB 読めず)"
+fi
+
+# working DB は ai-working ユーザーの home 配下 (700) にあるため sudo 経由で読む
+if command -v sudo >/dev/null 2>&1 && command -v sqlite3 >/dev/null 2>&1 \
+   && sudo -n true 2>/dev/null \
+   && sudo sqlite3 /home/ai-working/.harness-mem/harness-mem.db "PRAGMA integrity_check;" 2>/dev/null | grep -q '^ok$'; then
+  obs=$(sudo sqlite3 /home/ai-working/.harness-mem/harness-mem.db "SELECT count(*) FROM mem_observations;" 2>/dev/null)
+  echo "[ok] working DB integrity ok (observations=${obs})"
+else
+  echo "[warn] working DB integrity チェック失敗 (sudo/sqlite3 なし or DB 読めず)"
 fi
 
 echo "== 5. Caddy basic auth (100.92.131.75:${CADDY_PORT:-8090}) =="
@@ -97,12 +116,12 @@ else
 fi
 
 echo "== 6. security boundary =="
-# 公開 bind (0.0.0.0 / 公開IP) に 4000/37888/5432/4096 が無いこと
-# 例外: litellm:4000 / harness-memd:37888 は Tailscale IP のみに bind (自宅 opencode 用)。
-#       ここでは 0.0.0.0 でなければ OK。
-leaked=$(ss -tlnp 2>/dev/null | grep -E "0.0.0.0:(4000|37888|5432|4096)" || true)
+# 公開 bind (0.0.0.0 / 公開IP) に 4000/37888/37889/5432/4096 が無いこと
+# 例外: litellm:4000 / harness-memd:37888 / harness-memd-working:37889 は Tailscale IP のみに
+#       bind (自宅 opencode 用)。ここでは 0.0.0.0 でなければ OK。
+leaked=$(ss -tlnp 2>/dev/null | grep -E "0.0.0.0:(4000|37888|37889|5432|4096)" || true)
 if [ -z "$leaked" ]; then
-  echo "[ok] 4000/37888/5432/4096 は public (0.0.0.0) に露出していない"
+  echo "[ok] 4000/37888/37889/5432/4096 は public (0.0.0.0) に露出していない"
 else
   echo "[ng] 公開ポート漏れ: ${leaked}"
   fail=1

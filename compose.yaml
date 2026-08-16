@@ -3,14 +3,15 @@
 #
 #   postgres          LiteLLM 用 PostgreSQL (既存 volume 再利用)
 #   litellm           LLM ゲートウェイ
-#   harness-memd      harness-mem 記憶 daemon
+#   harness-memd      harness-mem 記憶 daemon (main / 長期記憶)
+#   harness-memd-working harness-mem 記憶 daemon (working / 作業記憶)
 #   opencode          CLI (都度 run)
 #   opencode-server   スマホ/web クライアント用 headless サーバー
 #   caddy             Tailscale 経由の入口 (basic auth + reverse proxy)
 #
 # ポート方針: public へ publish しない。Tailscale IP (100.92.131.75) への bind
-# (4000 / 37888) は自宅 opencode からの接続用。caddy (100.92.131.75:<CADDY_PORT>) が
-# 主要な外部入口。
+# (4000 / 37888 / 37889) は自宅 opencode からの接続用。caddy
+# (100.92.131.75:<CADDY_PORT>) が主要な外部入口。
 
 name: ai-stack
 
@@ -69,6 +70,31 @@ services:
       # 自宅 opencode から接続するため Tailscale IP に bind。
       - 100.92.131.75:37888:37888
 
+  harness-memd-working:
+    build:
+      context: .
+      dockerfile: docker/opencode/Dockerfile
+    restart: unless-stopped
+    environment:
+      HARNESS_MEM_HOST: 0.0.0.0
+      HARNESS_MEM_PORT: "37888"
+      HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_WORKING_ADMIN_TOKEN:?set in .env}
+      # HARNESS_MEM_HOME は state_dir (token/UI) 用。DB パスは HARNESS_MEM_DB_PATH
+      # (または HOME 由来の ~/.harness-mem) で解決されるため、working 用 DB を明示指定する。
+      HARNESS_MEM_HOME: /home/ai-working/.harness-mem
+      HARNESS_MEM_DB_PATH: /home/ai-working/.harness-mem/harness-mem.db
+      HOME: /home/ai-working
+    volumes:
+      # Working Memory (L1/L2)。ai-working ユーザーの home に保持する
+      - /home/ai-working/.harness-mem:/home/ai-working/.harness-mem
+    # bun は symlink (/opt/harness-mem) 経由の module 解決に失敗するため、
+    # npm global の実パスを直接指定する
+    command: ["bun", "run", "/usr/local/lib/node_modules/@chachamaru127/harness-mem/memory-server/src/index.ts"]
+    ports:
+      # 自宅 opencode から接続するため Tailscale IP に bind。
+      # コンテナ内部の port は 37888 のまま、host 側のみ 37889 に割り当てる。
+      - 100.92.131.75:37889:37888
+
   opencode-server:
     build:
       context: .
@@ -80,6 +106,9 @@ services:
       HARNESS_MEM_HOST: harness-memd
       HARNESS_MEM_PORT: "37888"
       HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
+      HARNESS_MEM_WORKING_HOST: harness-memd-working
+      HARNESS_MEM_WORKING_PORT: "37888"
+      HARNESS_MEM_WORKING_ADMIN_TOKEN: ${HARNESS_MEM_WORKING_ADMIN_TOKEN:?set in .env}
       OPENCODE_CONFIG: /etc/opencode/opencode.json
       # ヘッドレスなのでブラウザ自動起動を無効化
       BROWSER: /bin/true
@@ -94,6 +123,8 @@ services:
         condition: service_started
       harness-memd:
         condition: service_started
+      harness-memd-working:
+        condition: service_started
     # ポートは公開しない (caddy 経由のみ)
 
   opencode:
@@ -107,6 +138,9 @@ services:
       HARNESS_MEM_HOST: harness-memd
       HARNESS_MEM_PORT: "37888"
       HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
+      HARNESS_MEM_WORKING_HOST: harness-memd-working
+      HARNESS_MEM_WORKING_PORT: "37888"
+      HARNESS_MEM_WORKING_ADMIN_TOKEN: ${HARNESS_MEM_WORKING_ADMIN_TOKEN:?set in .env}
       OPENCODE_CONFIG: /etc/opencode/opencode.json
       BROWSER: /bin/true
     volumes:

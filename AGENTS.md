@@ -10,7 +10,8 @@
 - **サーバー** (`x162-43-21-240` / 公開 IP `162.43.21.240` / Tailscale `100.92.131.75`)
   - ai-stack (Docker Compose) で AI 基盤を一元管理
     - LiteLLM Proxy (compose 内, ポート 4000) — LLM ゲートウェイ
-    - harness-mem daemon (compose 内, ポート 37888) — 記憶/セッション DB
+    - harness-mem daemon (compose 内, ポート 37888) — 記憶/セッション DB (main / 長期記憶)
+    - harness-mem working daemon (compose 内, ポート 37889) — 作業記憶 (working)
     - opencode-server (compose 内, ポート 4096) — web/mobile 用 headless サーバー
     - Caddy (Tailscale IP `100.92.131.75:8090`) — 唯一の外部入口 (basic auth)
   - メールサーバー・Redmine・n8n など他サービス共存
@@ -24,13 +25,42 @@
 |---|---|---|
 | LiteLLM (compose 内) | `http://litellm:4000/v1` | `LITELLM_API_KEY` (仮想キー) |
 | harness-mem daemon (compose 内) | `http://harness-memd:37888` | `HARNESS_MEM_ADMIN_TOKEN` |
+| harness-mem working daemon (compose 内) | `http://harness-memd-working:37888` | `HARNESS_MEM_WORKING_ADMIN_TOKEN` |
 | opencode server (外部入口) | `http://100.92.131.75:8090` (Caddy) | basic auth |
 
 - 5432 / 4096 は public へ **publish しない**。compose 内の service name で通信。
 - 唯一の外部入口は **Caddy** (`100.92.131.75:8090`)、HTTP + Basic Auth で opencode-server へ proxy。
-- 例外: LiteLLM `4000` / harness-mem `37888` のみ Tailscale IP (`100.92.131.75:4000`, `100.92.131.75:37888`)
-  に bind。自宅の opencode から直接接続するためで、Tailscale 経由 + ログイン認証
-  (LITELLM_API_KEY / HARNESS_MEM_ADMIN_TOKEN) があるため public へは露出しない。
+- 例外: LiteLLM `4000` / harness-mem `37888` / harness-mem working `37889` のみ Tailscale IP
+  (`100.92.131.75:4000`, `100.92.131.75:37888`, `100.92.131.75:37889`) に bind。自宅の opencode
+  から直接接続するためで、Tailscale 経由 + ログイン認証 (LITELLM_API_KEY /
+  HARNESS_MEM_ADMIN_TOKEN / HARNESS_MEM_WORKING_ADMIN_TOKEN) があるため public へは露出しない。
+
+## Memory Policy
+
+Memory は `harness` (main / 長期記憶) と `harness-working` (作業記憶) の2つの MCP に分かれている。
+
+``` text
+Memory policy:
+
+- harness-working is the default memory store.
+
+- Store temporary findings, investigation results, errors,
+  hypotheses, TODOs and session state in harness-working.
+
+- harness is long-term project memory.
+
+- Read harness when long-term project context is required.
+
+- Do not store routine working state in harness.
+
+- Promote information from harness-working to harness only when
+  it represents a durable architecture decision, constraint,
+  convention, security policy or reusable knowledge.
+```
+
+- 過去の設計・知識が欲しい場合 → `harness` を read/search
+- 作業結果の記録・TODO・仮説など → `harness-working` に write
+- 一時的な作業状態を `harness` に書き込まないこと。
 
 ## 作業時の鉄則
 
@@ -63,6 +93,9 @@ docker compose ps
 
 # harness-mem daemon 再起動
 docker compose restart harness-memd
+
+# harness-mem working daemon 再起動
+docker compose restart harness-memd-working
 
 # opencode CLI (Docker 版)
 opencode            # 任意のディレクトリで起動

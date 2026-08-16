@@ -30,6 +30,19 @@
         "HARNESS_MEM_ADMIN_TOKEN": "{env:HARNESS_MEM_ADMIN_TOKEN}",
         "HARNESS_MEM_MCP_PLATFORM": "opencode"
       }
+    },
+    "harness-working": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "/opt/harness-mem/current/bin/harness-mcp-server"
+      ],
+      "environment": {
+        "HARNESS_MEM_HOST": "{env:HARNESS_MEM_WORKING_HOST}",
+        "HARNESS_MEM_PORT": "{env:HARNESS_MEM_WORKING_PORT}",
+        "HARNESS_MEM_ADMIN_TOKEN": "{env:HARNESS_MEM_WORKING_ADMIN_TOKEN}",
+        "HARNESS_MEM_MCP_PLATFORM": "opencode"
+      }
     }
   }
 }

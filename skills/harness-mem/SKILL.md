@@ -18,12 +18,19 @@ harness-mem の記憶 DB・daemon を扱うための運用知識。
 
 ## 構成
 
-- daemon: compose `harness-memd` (ai-stack)
-- DB: `~/.harness-mem/harness-mem.db` (WAL)
-- ログ: `~/.harness-mem/daemon.log`, `harness-mem-ui.log`
-- バインド: compose 内 `harness-memd:37888` (ホストへは publish しない)
-- 認証: `HARNESS_MEM_ADMIN_TOKEN` (Bearer)。ただし 401 強制は config.json の
-  `auth` セクション設定時のみ (詳細は architecture/security.md)
+Memory は main (長期記憶) と working (作業記憶) の2つの daemon に分かれている。
+
+- daemon (main): compose `harness-memd` (ai-stack)
+  - DB: `~/.harness-mem/harness-mem.db` (WAL) — user `tk`
+  - バインド: compose 内 `harness-memd:37888` (ホスト `100.92.131.75:37888`)
+  - 認証: `HARNESS_MEM_ADMIN_TOKEN`
+- daemon (working): compose `harness-memd-working` (ai-stack)
+  - DB: `/home/ai-working/.harness-mem/harness-mem.db` (WAL) — user `ai-working`
+  - バインド: compose 内 `harness-memd-working:37888` (ホスト `100.92.131.75:37889`)
+  - 認証: `HARNESS_MEM_WORKING_ADMIN_TOKEN` (main とは別)
+- ログ: `<home>/.harness-mem/daemon.log`, `harness-mem-ui.log`
+- 認証: いずれも Bearer。ただし 401 強制は config.json の `auth` セクション設定時のみ
+  (詳細は architecture/security.md)
 
 ## よく使う操作
 
@@ -31,12 +38,19 @@ harness-mem の記憶 DB・daemon を扱うための運用知識。
 # 状態確認
 cd ~/github/aktus-tk/ai-stack && docker compose ps
 docker compose exec harness-memd curl -s http://127.0.0.1:37888/health
+docker compose exec harness-memd-working curl -s http://127.0.0.1:37888/health
 
 # 再起動
 cd ~/github/aktus-tk/ai-stack && docker compose restart harness-memd
+cd ~/github/aktus-tk/ai-stack && docker compose restart harness-memd-working
 
 # DB 件数確認 (ホストから)
 sqlite3 ~/.harness-mem/harness-mem.db \
+  'SELECT (SELECT count(*) FROM mem_observations) AS obs, \
+          (SELECT count(*) FROM mem_sessions) AS sessions, \
+          (SELECT count(*) FROM mem_facts) AS facts;'
+
+sqlite3 /home/ai-working/.harness-mem/harness-mem.db \
   'SELECT (SELECT count(*) FROM mem_observations) AS obs, \
           (SELECT count(*) FROM mem_sessions) AS sessions, \
           (SELECT count(*) FROM mem_facts) AS facts;'

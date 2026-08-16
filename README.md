@@ -11,7 +11,7 @@ AI エージェント(Claude Code / opencode / Codex など)が安全に動作�
 |---|---|---|
 | LiteLLM Proxy | LLM ゲートウェイ・仮想キー管理 | サーバー (ai-stack compose) |
 | opencode | 対話型 AI エージェント CLI / web サーバー (モバイル: OpenClient for OpenCode) | サーバー (ai-stack compose) |
-| harness-mem | セッション/記憶の永続化 (MCP サーバー + daemon) | サーバー (ai-stack compose) |
+| harness-mem | セッション/記憶の永続化 (MCP サーバー + daemon) — main (長期) / working (作業) の2系統 | サーバー (ai-stack compose) |
 | Tailscale | サーバー⇔クライアント間の暗号化 VPN メッシュ | 全ノード |
 
 ## レポジトリ構成
@@ -93,7 +93,8 @@ opencode                                        # どのディレクトリから
 - セッションは `~/.local/share/opencode/opencode.db` (bind mount) に保存され、
   ホスト直起動と**同じ DB を共有**する
 - モデル・MCP は `config/opencode/opencode.json` を参照
-  (compose 内の service name `litellm:4000` / `harness-memd:37888` で接続)
+  (compose 内の service name `litellm:4000` / `harness-memd:37888` / `harness-memd-working:37888`
+  で接続。main と working の2つの memory MCP を公開)
 - 初回は image ビルドが必要: `docker compose build opencode`
 
 ### セッション引継ぎのポイント
