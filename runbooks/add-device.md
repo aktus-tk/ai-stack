@@ -24,7 +24,8 @@
 
 ## セキュリティ
 
-- harness-mem daemon への到達は Tailscale メッシュに依存。
-  Tailscale ACL (`tailscale` admin console) で、daemon へのアクセスを
-  必要なノードに限定することを推奨 (特に厳密なトークン認証を未導入の場合)。
+- harness-mem daemon / LiteLLM / Caddy への到達は Tailscale メッシュに依存。
+  サーバーへのアクセスは Tailscale ACL (`tailscale` admin console) で制御する。
+  現行 ACL (`autogroup:member` → `100.92.131.75`) は
+  `tcp:37888`, `tcp:4000`, `tcp:8090` を許可している (`skills/tailscale/SKILL.md` 参照)。
 - デバイスを廃止する場合は `sudo tailscale down` と ACL から除去。

@@ -82,6 +82,10 @@ cd ~/github/aktus-tk/ai-stack && docker compose ps
 # Tailscale 上のノード一覧
 tailscale status
 
+# Tailscale ACL (ポート許可) — admin console で確認
+# https://login.tailscale.com/admin/acls
+# autogroup:member → 100.92.131.75: tcp:37888, tcp:4000, tcp:8090
+
 # 入口 (Caddy) の疎通
 curl -s -m 3 -u 'luna:<password>' http://100.92.131.75:8090/global/health
 

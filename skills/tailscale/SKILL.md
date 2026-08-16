@@ -39,8 +39,26 @@ sudo tailscale down
 ## ACL
 
 Tailscale admin console (https://login.tailscale.com/admin/acls) で
-ノード間の到達性を制御できる。harness-mem daemon (`100.92.131.75:37888`) への
-アクセスを必要なクライアントのみに限定するのが推奨。
+ノード間の到達性を制御できる。クライアント (`autogroup:member`) からサーバー
+(`100.92.131.75`) へのアクセスは以下の ACL で許可している。
+
+```json
+{
+  "src": ["autogroup:member"],
+  "dst": ["100.92.131.75"],
+  "ip":  ["tcp:37888", "tcp:4000", "tcp:8090"]
+}
+```
+
+| ポート | 用途 |
+|---|---|
+| `tcp:37888` | harness-mem daemon (自宅 opencode の MCP) |
+| `tcp:4000` | LiteLLM (自宅 opencode の LLM proxy) |
+| `tcp:8090` | Caddy (opencode-server への入口) |
+
+- 追加ポートが必要になったらこの ACL に追記し、このドキュメントも更新する。
+- harness-mem daemon (`100.92.131.75:37888`) へのアクセスを
+  必要なクライアントのみに限定するのが推奨。
 
 ## 関連
 
