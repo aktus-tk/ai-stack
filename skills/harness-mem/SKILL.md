@@ -62,11 +62,38 @@ sqlite3 /home/ai-working/.harness-mem/harness-mem.db \
 ./scripts/backup-harness.sh   # VACUUM INTO で一貫スナップショットを保存
 ```
 
-## Granite embedding 移行 (推奨・未実施)
+## 検索基盤の現状 (2026-08-17 実測)
 
-日本語クロスリンガル精度向上のため、embedding を Granite に切替えるのが推奨。
+- `config.json` は `embedding_provider: auto` / `embedding_model: multilingual-e5` を指定
+  しているが、**embedding モデルが未インストール**のため daemon は
+  `fallback:local-hash-v3` (hash 擬似ベクトル) で動作している。
+- `embedding_provider: fallback` / `vector_engine: js-fallback` / `reranker_enabled: false`
+  (metrics API で確認可)。
+- hash 擬似ベクトルは意味的類似性を持たないため、実質の検索は
+  **FTS (キーワード/BM25) + グラフ**のみ。セマンティック検索・あいまい検索は機能していない。
+- したがって「導入で精度が上がる」のではなく「セマンティック検索が無い状態に
+  初めて実装される」と理解する。
 
-- 効果: 複合スコア +0.20 / 日本語クロスリンガル 0.54 → 0.96
+確認コマンド:
+
+```bash
+curl -s http://100.92.131.75:37888/v1/metrics -H "Authorization: Bearer $HARNESS_MEM_ADMIN_TOKEN"
+```
+
+## Embedding 導入 (推奨・未実施)
+
+意味検索・あいまい検索を有効化するため、embedding モデルを導入し
+`--reset` で全ベクトルを再計算するのが推奨。
+
+- 効果:
+  - 検索精度: 大幅向上 (現状はキーワード一致前提)。
+  - あいまい検索: 同義語・言い換え・文脈による意味的類似検索が可能になる。
+  - token 節約: 直接効果なし (embedding は LLM に送られない) が、検索精度↑ による
+    不要観測の返却減と、dedupe/統合精度↑ による観測総数減の間接効果がある。
+- モデル選択: データは日本語中心のため、多言語モデルが望ましい。
+  - `multilingual-e5` (多言語, dim=384) — 現在 config が参照中のモデル
+  - `granite-embedding-311m-r2` (日本語クロスリンガル 0.54 → 0.96 / 複合スコア +0.20)
+  - `ruri-v3-30m` (日本語特化, dim=256) — 日本語のみなら有力候補
 - 注意: `--reset` で全ベクトル再計算。移行中は検索精度が一時低下。
 
 ```bash
