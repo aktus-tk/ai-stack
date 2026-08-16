@@ -47,6 +47,9 @@ ENV HOME="/home/tk" \
     OPENCODE_DATA="/home/tk/.local/share/opencode" \
     OPENCODE_CONFIG_DIR="/home/tk/.config/opencode"
 
+# 作業プロジェクト用ディレクトリ作成
+RUN mkdir -p /home/tk/ai-stack /home/tk/scratch
+
 WORKDIR /workspace
 
 # バージョン確認 (build 時の検証)
