@@ -104,8 +104,9 @@ services:
       # 上限 (60s) まで延長してモデルロードを完了させる。
       HARNESS_MEM_SEARCH_WORKER_TIMEOUT_MS: "60000"
       HARNESS_MEM_SEARCH_WORKER_STARTUP_TIMEOUT_MS: "60000"
-      # reindex_vectors scheduler を有効化（fallback → granite 自動変換）
-      HARNESS_MEM_REINDEX_VECTORS_ENABLED: "true"
+      # reindex_vectors scheduler は無効化（working は granite 変換済み。
+      # 有効だと main と同時刻に 299MB モデルロードが走り、1.9GB RAM ホストで OOM になる)
+      HARNESS_MEM_REINDEX_VECTORS_ENABLED: "false"
     volumes:
       # Working Memory (L1/L2)。ai-working ユーザーの home に保持する
       - /home/ai-working/.harness-mem:/home/ai-working/.harness-mem
