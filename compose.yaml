@@ -60,6 +60,17 @@ services:
       HARNESS_MEM_PORT: "37888"
       HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
       HARNESS_MEM_HOME: /home/tk/.harness-mem
+      # embedding プロバイダ: auto = ローカル ONNX モデル (DB の
+      # embedding_default_model フラグ granite-embedding-311m-r2@384 を採用)。
+      # 未設定だと getConfig() が "fallback" (hash) になり granite が使われない。
+      HARNESS_MEM_EMBEDDING_PROVIDER: auto
+      # granite-embedding-311m-r2 (ONNX 299MB) の lazy init は初回検索時に
+      # search worker 内で完了するため、既定の 3 秒ではタイムアウトする。
+      # 上限 (60s) まで延長してモデルロードを完了させる。
+      HARNESS_MEM_SEARCH_WORKER_TIMEOUT_MS: "60000"
+      HARNESS_MEM_SEARCH_WORKER_STARTUP_TIMEOUT_MS: "60000"
+      # reindex_vectors scheduler を有効化（fallback → granite 自動変換）
+      HARNESS_MEM_REINDEX_VECTORS_ENABLED: "true"
     volumes:
       # 既存の記憶 DB を引き継ぐ
       - /home/tk/.harness-mem:/home/tk/.harness-mem
@@ -84,6 +95,17 @@ services:
       HARNESS_MEM_HOME: /home/ai-working/.harness-mem
       HARNESS_MEM_DB_PATH: /home/ai-working/.harness-mem/harness-mem.db
       HOME: /home/ai-working
+      # embedding プロバイダ: auto = ローカル ONNX モデル (DB の
+      # embedding_default_model フラグ granite-embedding-311m-r2@384 を採用)。
+      # 未設定だと getConfig() が "fallback" (hash) になり granite が使われない。
+      HARNESS_MEM_EMBEDDING_PROVIDER: auto
+      # granite-embedding-311m-r2 (ONNX 299MB) の lazy init は初回検索時に
+      # search worker 内で完了するため、既定の 3 秒ではタイムアウトする。
+      # 上限 (60s) まで延長してモデルロードを完了させる。
+      HARNESS_MEM_SEARCH_WORKER_TIMEOUT_MS: "60000"
+      HARNESS_MEM_SEARCH_WORKER_STARTUP_TIMEOUT_MS: "60000"
+      # reindex_vectors scheduler を有効化（fallback → granite 自動変換）
+      HARNESS_MEM_REINDEX_VECTORS_ENABLED: "true"
     volumes:
       # Working Memory (L1/L2)。ai-working ユーザーの home に保持する
       - /home/ai-working/.harness-mem:/home/ai-working/.harness-mem
@@ -103,6 +125,7 @@ services:
     working_dir: /workspace
     environment:
       LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:?set in .env}
       HARNESS_MEM_HOST: harness-memd
       HARNESS_MEM_PORT: "37888"
       HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
