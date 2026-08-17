@@ -86,4 +86,5 @@ sudo systemctl start harness-memd
 
 - 全体構成 → `compose.yaml`
 - 検証 → `scripts/verify.sh`
-- Granite embedding 切替 (推奨・未実施) → `skills/harness-mem/SKILL.md`
+- Granite embedding 導入 (完了・検証済み) → `skills/harness-mem/SKILL.md` /
+  `runbooks/harness-mem-granite-migration.md` / `docs/granite-embedding-verification.md`

@@ -7,6 +7,29 @@
 
 ---
 
+## 0. Status: **COMPLETE** (verified 2026-08-17)
+
+Migration is finished and verified. Detailed verification results and the acceptance
+table live in `docs/granite-embedding-verification.md`.
+
+**Final state:**
+
+| Daemon | Granite vectors | Live observations | Coverage | Health |
+|---|---|---|---|---|
+| Main (`37888`) | **5,634** | 5,634 | **100%** | `status: ok` / `embedding_ready: true` / `ready` |
+| Working (`37889`) | 34 (at migration time) | 34 at migration time | 100% (migration-time obs) | `provider: local`, granite active in searches; may show transient `warming` (lazy-init) until a search loads the model |
+
+- Main daemon scheduler log: `converged — vector coverage target reached`
+  (observed 2026-08-17 ~10:04Z).
+- The remaining fallback rows on main (5,459) are stale duplicates of converted
+  observations; they do not affect retrieval (current-model predicate wins).
+- **New observations on the working daemon are not auto-converted** — its reindex
+  scheduler is disabled (OOM prevention, commit `c44c0cd`). New obs since migration
+  (e.g. 7 as of 2026-08-17) carry fallback vectors only; run a bulk reindex (see §8)
+  to convert them when convenient.
+
+---
+
 ## 1. Baseline Numbers (captured 2026-08-17 ~06:05Z, before conversion started)
 
 ### Main daemon — `ai-stack-harness-memd-1` (port 37888, DB `/home/tk/.harness-mem/harness-mem.db`)
@@ -47,6 +70,10 @@
 Commits:
 - `b599aea` Enable reindex-vectors scheduler for granite embedding migration
 - `c44c0cd` Disable reindex scheduler on working daemon (converged; prevents OOM double model-load)
+
+Post-migration note: the main daemon's scheduler is still enabled but converged — ticks
+now reindex 0 rows (no-op) and are safe to leave on (they keep new observations covered).
+It can be disabled later if desired (same env var = `false`).
 
 ---
 
@@ -106,17 +133,19 @@ cat /proc/swaps
 
 ---
 
-## 4. Expected Timeline
+## 4. Timeline — ACTUAL (completed early via local bulk reindex)
 
-- **Main daemon:** conversion began 2026-08-17 ~06:41Z. First two ticks backfilled 150
-  vectorless observations (26 → 176 granite). The remaining **~5,459 fallback-only
-  observations** convert at ~100 per 10-min tick → **~9 hours** (expected completion
-  around **2026-08-17 ~15:45–16:00Z**). If a tick reindexes fewer than 100 (new
-  observations, ingest load), completion may slip by a few hours.
-- **Working daemon:** already complete (34/34 live observations granite). Stale fallback
-  duplicates (37 rows) are harmless and are not processed.
+- The in-container scheduler was **replaced by a local bulk reindex** on the desk PC
+  (24 cores): one admin reindex call reindexed the remaining 4,057 observations in
+  **1,029,492 ms (~17.2 min)** — far faster than the ~9 h in-container estimate.
+  Response confirmed: `migration_complete: true`, `vector_coverage: 1`,
+  `current_model_vectors: 5634`, `missing_vectors_remaining: 0`,
+  `legacy_vectors_remaining: 0`, `retryable_embedding_errors: []`.
+- The converted DB was copied back to the server and both daemons restarted.
+- **Working daemon:** already complete (34/34 live observations granite at migration
+  time). Stale fallback duplicates (37 rows) are harmless and are not processed.
 
-### Success criteria (completion check)
+### Success criteria (completion check) — PASSED
 
 All live observations have a granite vector:
 ```bash
@@ -124,9 +153,9 @@ sudo sqlite3 /home/tk/.harness-mem/harness-mem.db \
   "SELECT COUNT(*) FROM mem_observations o WHERE o.archived_at IS NULL
    AND NOT EXISTS (SELECT 1 FROM mem_vectors v WHERE v.observation_id=o.id
                    AND v.model='local:granite-embedding-311m-r2');"
--- expected: 0
+-- expected: 0  (verified: 0 on main; working has 7 new obs since migration)
 ```
-Expected log line on the main daemon:
+Log line confirmed on the main daemon:
 `converged — vector coverage target reached { coverage: ≥0.95, ... }`
 
 Note: `fallback:local-hash-v3` rows for already-converted observations remain in
@@ -220,3 +249,25 @@ while true; do
   sleep 300
 done
 ```
+
+---
+
+## 8. Cleanup (post-verification)
+
+Migration is verified (see `docs/granite-embedding-verification.md`). The following
+rollback artifacts are no longer needed once you are confident; each frees significant
+disk (host disk is ~92% full):
+
+| Artifact | Location | Size | When to delete |
+|---|---|---|---|
+| `model.onnx.fp32.bak` (main) | `/home/tk/.harness-mem/models/granite-embedding-311m-r2/onnx/` | 1.2 GB | After smoke test passes (recall queries return sane results). Active model is `model.onnx` (299 MB, int8); no code path references the `.fp32.bak`. |
+| `model.onnx.fp32.bak` (working) | `/home/ai-working/.harness-mem/models/granite-embedding-311m-r2/onnx/` | 1.2 GB | Same as above |
+| Pre-reindex DB | `/home/tk/.harness-mem/harness-mem.db.pre-local-reindex` | 622 MB | After you confirm no rollback needed; keep the newest pre-granite backup (`/home/tk/backups/harness-mem/`) as the durable fallback |
+
+Suggested order: keep everything for at least a few days of normal usage → delete the two
+`.fp32.bak` files first (2.4 GB) → keep the `.pre-local-reindex` DB until the next
+successful `./scripts/backup-harness.sh` snapshot exists → then delete it.
+
+Other post-migration hygiene (unrelated to embedding): journald vacuum, docker builder
+prune, apt clean, and old Claude versions — see the local plan
+`/home/tk/opencode/granite-cleanup-plan.md` (not in this repo).
