@@ -73,9 +73,12 @@ granite embedding は **導入完了・検証済み** (2026-08-17)。両 daemon 
   ローカル PC (24 コア) での一括再インデックス (~17.2 分) で変換し、DB を
   サーバーへ戻して反映した。scheduler ログに
   `converged — vector coverage target reached` を確認済み。
-- **working daemon**: 移行時点の 34 観測は 100% granite 変換済み。OOM 防止のため
-  reindex scheduler は無効のまま (converged 済み)。移行後に新規追加された観測は
-  fallback ベクトルのみのため、必要に応じて将来の再インデックス対象になる。
+- **working daemon**: 全 live 観測 (47 件) の 100% が granite ベクトルへ変換済み。
+  移行後に蓄積した新規観測は daemon の admin API (`POST /v1/admin/reindex-vectors`,
+  2026-08-17) で granite へ変換した (`reindexed: 12` / `vector_coverage: 1` /
+  `migration_complete: true`)。OOM 防止のため reindex scheduler は無効のまま
+  (converged 済み)。検証用に archived 済みのテスト観測 3 件 (WORKING_TEST_816_XYZ)
+  のみ fallback ベクトルが残るが、archived 行は検索・取得対象外のため実害なし。
 - health の主要フィールド (main): `status: ok` / `embedding_ready: true` /
   `embedding_readiness_state: ready` / `embedding_provider_status: healthy`。
 - working daemon は再起動直後などに `status: degraded` / `embedding_ready: false` /
@@ -115,10 +118,10 @@ sudo sqlite3 /home/tk/.harness-mem/harness-mem.db \
    通常の MCP 利用は project スコープ付きなので実害はないが、挙動として理解しておく。
 2. **`vector_engine` は `js-fallback`**: コンテナに sqlite-vec 拡張がないため、
    JS 実装の総当たりコサイン類似度で動作する。正しく動くがやや遅い。
-3. **rollback ファイルが残っている** (動作確認が取れ次第削除してよい):
-   - `model.onnx.fp32.bak` — 各 1.2GB (両 daemon のモデルディレクトリ)
-   - `/home/tk/.harness-mem/harness-mem.db.pre-local-reindex` — 622MB
-   - 削除判断の目安は `runbooks/harness-mem-granite-migration.md` の「Cleanup」節を参照
+3. **rollback ファイルは削除済み** (2026-08-17):
+   - `model.onnx.fp32.bak` ×2 (各 1.2GB) と
+     `/home/tk/.harness-mem/harness-mem.db.pre-local-reindex` (622MB) を削除済み。
+   - 恒久バックアップは `/home/tk/backups/harness-mem/` を参照。
 
 ## Embedding 運用メモ
 

@@ -254,19 +254,17 @@ done
 
 ## 8. Cleanup (post-verification)
 
-Migration is verified (see `docs/granite-embedding-verification.md`). The following
-rollback artifacts are no longer needed once you are confident; each frees significant
-disk (host disk is ~92% full):
+**COMPLETED 2026-08-17.** All rollback artifacts below were deleted after both daemons
+were verified healthy and 100% granite (main 5,634/5,634; working 47/47 live obs).
+Host disk usage dropped from 75% to 69% (`df -h /`: 50G total / 33G used / 15G free).
 
-| Artifact | Location | Size | When to delete |
+| Artifact | Location | Size | Status |
 |---|---|---|---|
-| `model.onnx.fp32.bak` (main) | `/home/tk/.harness-mem/models/granite-embedding-311m-r2/onnx/` | 1.2 GB | After smoke test passes (recall queries return sane results). Active model is `model.onnx` (299 MB, int8); no code path references the `.fp32.bak`. |
-| `model.onnx.fp32.bak` (working) | `/home/ai-working/.harness-mem/models/granite-embedding-311m-r2/onnx/` | 1.2 GB | Same as above |
-| Pre-reindex DB | `/home/tk/.harness-mem/harness-mem.db.pre-local-reindex` | 622 MB | After you confirm no rollback needed; keep the newest pre-granite backup (`/home/tk/backups/harness-mem/`) as the durable fallback |
+| `model.onnx.fp32.bak` (main) | `/home/tk/.harness-mem/models/granite-embedding-311m-r2/onnx/` | 1.2 GB | **DELETED 2026-08-17** |
+| `model.onnx.fp32.bak` (working) | `/home/ai-working/.harness-mem/models/granite-embedding-311m-r2/onnx/` | 1.2 GB | **DELETED 2026-08-17** |
+| Pre-reindex DB | `/home/tk/.harness-mem/harness-mem.db.pre-local-reindex` | 622 MB | **DELETED 2026-08-17** |
 
-Suggested order: keep everything for at least a few days of normal usage → delete the two
-`.fp32.bak` files first (2.4 GB) → keep the `.pre-local-reindex` DB until the next
-successful `./scripts/backup-harness.sh` snapshot exists → then delete it.
+Durable backups remain under `/home/tk/backups/harness-mem/`.
 
 Other post-migration hygiene (unrelated to embedding): journald vacuum, docker builder
 prune, apt clean, and old Claude versions — see the local plan

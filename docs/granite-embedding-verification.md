@@ -150,10 +150,13 @@ scp /tmp/harness-mem-reindex-copy.db desk-pc:/tmp/opencode/granite-local-run/har
 
 ## 6. 残タスク / リマインダー
 
-- [ ] 動作確認 (数日間の通常利用) 後に rollback ファイルを削除:
+- [x] rollback ファイル削除済み (2026-08-17):
   `model.onnx.fp32.bak` ×2 (各 1.2GB) と
   `/home/tk/.harness-mem/harness-mem.db.pre-local-reindex` (622MB)。
   詳細は `runbooks/harness-mem-granite-migration.md` §8。
+- [x] working daemon の新規 fallback 観測を granite へ変換済み (2026-08-17,
+  admin API `POST /v1/admin/reindex-vectors`, live 47 観測すべて granite、
+  archived テスト観測 3 件は対象外)。
 - [ ] (任意) main の reindex scheduler は converged 済みで tick は no-op。不要なら
   compose.yaml で `HARNESS_MEM_REINDEX_VECTORS_ENABLED=false` にしてよい
   (working と同様)。
