@@ -9,9 +9,8 @@ AI エージェント(Claude Code / opencode / Codex など)が安全に動作�
 
 | コンポーネント | 役割 | 場所 |
 |---|---|---|
-| LiteLLM Proxy | LLM ゲートウェイ・仮想キー管理 | サーバー (ai-stack compose) |
 | opencode | 対話型 AI エージェント CLI / web サーバー (モバイル: OpenClient for OpenCode) | サーバー (ai-stack compose) |
-| harness-mem | セッション/記憶の永続化 (MCP サーバー + daemon) — main (長期) / working (作業) の2系統 | サーバー (ai-stack compose) |
+| harness-mem | remote memory service (HTTP API) — main (long-term) / working (working) の2系統 | サーバー (ai-stack compose) |
 | Tailscale | サーバー⇔クライアント間の暗号化 VPN メッシュ | 全ノード |
 
 ## レポジトリ構成
@@ -75,9 +74,10 @@ opencode -s ses_0003192c2ffeF50ENtS1FVeRVX   # 特定セッションを継続
 opencode                                    # 新規/セッション選択
 ```
 
-- モデル・MCP は `~/.config/opencode/opencode.json` を参照
-  (LiteLLM は `http://100.92.131.75:4000/v1` で接続。Tailscale IP のみに bind)
+- モデル設定は `~/.config/opencode/opencode.json` を参照
+  (OpenCode Go ゲートウェイ経由。`OPENCODE_API_KEY` で認証)
 - セッションは `~/.local/share/opencode/opencode.db` に保存
+- memory へのアクセスは global skill (memory-commit / harness-recall) 経由で HTTP API を使用
 
 ### 2. Docker コンテナ経由 (推奨)
 
@@ -92,9 +92,9 @@ opencode                                        # どのディレクトリから
   (ホストと同じ絶対パスで見せるため、セッション引継ぎが機能する)
 - セッションは `~/.local/share/opencode/opencode.db` (bind mount) に保存され、
   ホスト直起動と**同じ DB を共有**する
-- モデル・MCP は `config/opencode/opencode.json` を参照
-  (compose 内の service name `litellm:4000` / `harness-memd:37888` / `harness-memd-working:37888`
-  で接続。main と working の2つの memory MCP を公開)
+- モデル設定は `config/opencode/opencode.json` を参照
+  (OpenCode Go ゲートウェイ経由。`OPENCODE_API_KEY` で認証)
+- memory へのアクセスは global skill 経由で HTTP API を使用 (MCP 不使用)
 - 初回は image ビルドが必要: `docker compose build opencode`
 
 ### セッション引継ぎのポイント

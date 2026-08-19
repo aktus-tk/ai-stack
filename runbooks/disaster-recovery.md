@@ -4,7 +4,7 @@
 
 - `scripts/backup-harness.sh` で DB を定期的にバックアップ (cron 推奨)。
 - バックアップは DB 本体 + WAL を一貫スナップショットにまとめる (`VACUUM INTO`)。
-- シークレット (LiteLLM キー, harness-mem トークン) は各ノードの設定から再現可能にしておく。
+- シークレット (OPENCODE_API_KEY, harness-mem トークン) は各ノードの設定から再現可能にしておく。
 
 ## 復旧シナリオ
 
@@ -47,5 +47,5 @@ ssh x 'sudo systemctl restart harness-memd'
 
 ## 検証
 
-復旧後は必ず `./scripts/verify.sh` を実行して、LiteLLM と harness-mem の
-両方が疎通することを確認する。
+復旧後は必ず `./scripts/verify.sh` を実行して、harness-mem daemon の疎通と
+opencode の起動を確認する。

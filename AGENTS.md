@@ -9,58 +9,63 @@
 
 - **サーバー** (`x162-43-21-240` / 公開 IP `162.43.21.240` / Tailscale `100.92.131.75`)
   - ai-stack (Docker Compose) で AI 基盤を一元管理
-    - LiteLLM Proxy (compose 内, ポート 4000) — LLM ゲートウェイ
-    - harness-mem daemon (compose 内, ポート 37888) — 記憶/セッション DB (main / 長期記憶)
-    - harness-mem working daemon (compose 内, ポート 37889) — 作業記憶 (working)
+    - harness-mem daemon (compose 内, ポート 37888) — long-term memory store (main)
+    - harness-mem daemon (compose 内, ポート 37889) — working memory store (working)
     - opencode-server (compose 内, ポート 4096) — web/mobile 用 headless サーバー
     - Caddy (Tailscale IP `100.92.131.75:8090`) — 唯一の外部入口 (basic auth)
   - メールサーバー・Redmine・n8n など他サービス共存
 - **クライアント** (例: `desk` / Tailscale `100.122.82.18`)
   - opencode CLI (Docker コンテナ経由で実行、`scripts/opencode` wrapper)
-  - harness-mem MCP クライアント (compose 内の daemon に接続)
+  - global skills で harness-mem に HTTP API で接続
 
 ## 接続の原則
 
-| 対象 | 接続先 | 認証 |
-|---|---|---|
-| LiteLLM (compose 内) | `http://litellm:4000/v1` | `LITELLM_API_KEY` (仮想キー) |
-| harness-mem daemon (compose 内) | `http://harness-memd:37888` | `HARNESS_MEM_ADMIN_TOKEN` |
-| harness-mem working daemon (compose 内) | `http://harness-memd-working:37888` | `HARNESS_MEM_WORKING_ADMIN_TOKEN` |
-| opencode server (外部入口) | `http://100.92.131.75:8090` (Caddy) | basic auth |
+| 対象 | 接続先 | 認証 | 用途 |
+|---|---|---|---|
+| OpenCode Go (外部) | `https://opencode.ai/zen/go/v1` | `OPENCODE_API_KEY` | LLM API |
+| harness-mem main (compose 内) | `http://harness-memd:37888/v1` | `HARNESS_MEM_ADMIN_TOKEN` | long-term memory (HTTP) |
+| harness-mem working (compose 内) | `http://harness-memd-working:37889/v1` | `HARNESS_MEM_WORKING_ADMIN_TOKEN` | working memory (HTTP) |
+| opencode server (外部入口) | `http://100.92.131.75:8090` (Caddy) | basic auth | web / mobile UI |
 
-- 5432 / 4096 は public へ **publish しない**。compose 内の service name で通信。
-- 唯一の外部入口は **Caddy** (`100.92.131.75:8090`)、HTTP + Basic Auth で opencode-server へ proxy。
-- 例外: LiteLLM `4000` / harness-mem `37888` / harness-mem working `37889` のみ Tailscale IP
-  (`100.92.131.75:4000`, `100.92.131.75:37888`, `100.92.131.75:37889`) に bind。自宅の opencode
-  から直接接続するためで、Tailscale 経由 + ログイン認証 (LITELLM_API_KEY /
-  HARNESS_MEM_ADMIN_TOKEN / HARNESS_MEM_WORKING_ADMIN_TOKEN) があるため public へは露出しない。
+**注**: 
+- クライアントの OpenCode は harness-mem に対して MCP ではなく HTTP API で直接接続
+- HTTP API 呼び出しは global skill (memory-commit / harness-recall) で行われ、CLI/curl を使用
+- 4096 は public へ**publish しない**。compose 内の service name で通信。
+- 唯一の外部入口は **Caddy** (`100.92.131.75:8090`)。
+- harness-mem `37888` / `37889` のみ Tailscale IP (`100.92.131.75`) に bind。
+  自宅の opencode から直接接続するためで、Tailscale 経由 + token 認証があるため public へは露出しない。
 
 ## Memory Policy
 
-Memory は `harness` (main / 長期記憶) と `harness-working` (作業記憶) の2つの MCP に分かれている。
+OpenCode の記憶は2つのレイヤーに分かれている：
 
-``` text
-Memory policy:
+1. **OpenCode local session/history** — 短期作業 context + crash recovery
+   - OpenCode が管理 (MCP・harness-mem に依存しない)
+   - セッション切断 / crash 後は復旧可能
 
-- harness-working is the default memory store.
+2. **harness-mem (main / working stores)** — 長期的に記憶を残す必要がある場合のみ
+   - ユーザーが「ここまで記憶して」と**明示**したときだけ保存
+   - 自動記録はしない
+   - main store: 建築的決定・ポリシー・再利用可能な知識
+   - working store: 一時的な調査結果・仮説・作業記憶
 
-- Store temporary findings, investigation results, errors,
-  hypotheses, TODOs and session state in harness-working.
+```text
+Memory policy (明示 commit 方式):
 
-- harness is long-term project memory.
+- OpenCode local session が基本的な context 管理を担当
 
-- Read harness when long-term project context is required.
+- 長期的に残したい情報は、ユーザーが
+  「ここまで記憶して」「記憶しておいて」と発話したときだけ
+  harness-mem に保存される（memory-commit skill 経由）
 
-- Do not store routine working state in harness.
+- 過去の記憶が必要な場合は、ユーザーが
+  「思い出して」「前回は何を」と発話したとき
+  harness-mem から取得される（harness-recall skill 経由）
 
-- Promote information from harness-working to harness only when
-  it represents a durable architecture decision, constraint,
-  convention, security policy or reusable knowledge.
+- crash 復旧は OpenCode local session で完結
 ```
 
-- 過去の設計・知識が欲しい場合 → `harness` を read/search
-- 作業結果の記録・TODO・仮説など → `harness-working` に write
-- 一時的な作業状態を `harness` に書き込まないこと。
+参照: `~/.agents/skills/memory-commit/SKILL.md`, `~/.agents/skills/harness-recall/SKILL.md`
 
 ## 作業時の鉄則
 
@@ -68,7 +73,7 @@ Memory policy:
 2. **設定変更前に現在状態を確認** する (`docker compose ps`, `ss -tlnp`, 設定ファイルの読み取り)。
 3. **シークレットをコミットしない**。`.env.example` に雛形を置き、実際の値は各ノードの `.env` に置く。
 4. 環境を構築・変更するときは **runbooks/** を、扱い方・拡張・留意点は **skills/** を参照する。
-5. **systemd と Docker の harness-memd を同時起動しない** (同一 SQLite DB を共有するため)。
+5. **docker compose と local harness-memd の同時起動に注意** (同一 SQLite DB を共有する場合)。
 6. `docker compose build` はメモリ 1.9GB 環境だとクラッシュしうる。キャッシュを活かすか、
    ビルド前に不要なコンテナを止めること。
 7. **依存製品・外部ライブラリの内部デバッグは、ユーザーから明示的な指示がない限り行わない。**

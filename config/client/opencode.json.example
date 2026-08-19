@@ -8,33 +8,17 @@
   },
 
   "provider": {
-    "litellm": {
+    "opencode-go": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "LiteLLM",
+      "name": "OpenCode Go",
       "options": {
-        "baseURL": "http://162.43.21.240:4000/v1",
-        "apiKey": "{env:LITELLM_API_KEY}"
+        "baseURL": "https://opencode.ai/zen/go/v1",
+        "apiKey": "{env:OPENCODE_API_KEY}"
       },
       "models": {
-        "deepseek-v4-flash": {
-          "name": "DeepSeek V4 Flash"
-        }
-      }
-    }
-  },
-
-  "mcp": {
-    "harness": {
-      "type": "local",
-      "enabled": true,
-      "command": [
-        "/home/tk/.volta/tools/image/packages/@chachamaru127/harness-mem/lib/node_modules/@chachamaru127/harness-mem/bin/harness-mcp-server"
-      ],
-      "environment": {
-        "HARNESS_MEM_HOST": "100.92.131.75",
-        "HARNESS_MEM_PORT": "37888",
-        "HARNESS_MEM_ADMIN_TOKEN": "REPLACE_WITH_SERVER_TOKEN",
-        "HARNESS_MEM_MCP_PLATFORM": "opencode"
+        "deepseek-v4-flash": { "name": "DeepSeek V4 Flash" },
+        "deepseek-v4-pro": { "name": "DeepSeek V4 Pro" },
+        "glm-5.2": { "name": "GLM 5.2" }
       }
     }
   }

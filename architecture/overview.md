@@ -3,51 +3,62 @@
 ## 全体像
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │            サーバー (x162-43-21-240)      │
-                    │          公開IP 162.43.21.240            │
-                    │          Tailscale 100.92.131.75         │
-                    │                                         │
-                    │  ┌─────────────┐    ┌─────────────────┐  │
-                    │  │  LiteLLM    │    │  harness-memd   │  │
-                    │  │  Proxy      │    │  (systemd)      │  │
-                    │  │  :4000      │    │  :37888         │  │
-                    │  └──────┬──────┘    │   bind:100.92.  │  │
-                    │         │           │   131.75        │  │
-                    │  ┌──────┴──────┐    └────────┬────────┘  │
-                    │  │  Postgres   │             │           │
-                    │  │  (litellm)  │     ┌───────┴───────┐   │
-                    │  └─────────────┘     │  harness-mem  │   │
-                    │                      │  sqlite DB    │   │
-                    │                      └───────────────┘   │
-                    └───────────────┬─────────────────────────┘
-                                    │
-                HTTP (LiteLLM)      │ Tailscale mesh (daemon)
-                                    │
-                    ┌───────────────┴─────────────────────────┐
-                    │            クライアント (desk 他)         │
-                    │          Tailscale 100.122.82.18        │
-                    │                                         │
-                    │  ┌──────────┐   ┌─────────────────────┐ │
-                    │  │ opencode │   │ harness-mem MCP     │ │
-                    │  │ CLI      │   │ client              │ │
-                    │  └──────────┘   └─────────────────────┘ │
-                    └─────────────────────────────────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │      サーバー (x162-43-21-240)                 │
+                    │    公開IP 162.43.21.240                       │
+                    │    Tailscale 100.92.131.75                    │
+                    │                                              │
+                    │  ┌────────────────────────────────────────┐  │
+                    │  │ harness-mem daemon                     │  │
+                    │  │ (remote memory service)                │  │
+                    │  │ :37888 (main) :37889 (working)         │  │
+                    │  │ HTTP API (no MCP)                      │  │
+                    │  │ (docker compose)                       │  │
+                    │  └────────────────────────────────────────┘  │
+                    └───────────┬──────────────────────────────────┘
+                                │
+                       memory HTTP (Tailscale)
+                       + トークン
+                                │
+                    ┌───────────┴──────────────────────────────┐
+                    │     クライアント (desk 他)                 │
+                    │   Tailscale 100.122.82.18               │
+                    │                                        │
+                    │ ┌────────────────────────────────────┐ │
+                    │ │          OpenCode CLI              │ │
+                    │ │  ├─ local session/history          │ │
+                    │ │  │  (crash recovery)               │ │
+                    │ │  │                                  │ │
+                    │ │  ├─ global skill:                  │ │
+                    │ │  │  memory-commit                  │ │
+                    │ │  │    └─ curl → daemon:37889 HTTP │ │
+                    │ │  │                                  │ │
+                    │ │  └─ global skill:                  │ │
+                    │ │     harness-recall                 │ │
+                    │ │       └─ curl → daemon:37888 HTTP │ │
+                    │ └────────────────────────────────────┘ │
+                    └────────────────────────────────────────┘
 ```
 
-## 主要な決定事項
+## 責務の分離
 
-- **LiteLLM は公開 IP で公開**: クライアントが直接 `http://162.43.21.240:4000/v1` に
-  アクセスし、仮想キーで認証する。Tailscale 越しでも公開 IP でも使える構成。
-- **harness-mem daemon は Tailscale にのみバインド**: `100.92.131.75:37888`。
-  公開インターフェースには一切バインドせず、外部からの直接攻撃面をゼロにする。
-- **記憶(harness-mem)は中央集約**: 全クライアントが単一の daemon を参照することで、
-  どのマシン・どのエージェントからでも同じ記憶を引き出せる。
-- **クライアントは Thin**: エージェント本体 + MCP クライアント設定のみ。状態は持たない。
+| コンポーネント | 責務 | 特徴 |
+|---|---|---|
+| **OpenCode local session/history** | 短期作業 context + crash recovery | OpenCode が管理 (MCP 不使用) |
+| **global skill: memory-commit** | ユーザー明示による harness-mem への永続保存 | curl で HTTP API 呼び出し |
+| **global skill: harness-recall** | 過去記憶の検索・取得 | curl で HTTP API 呼び出し |
+| **harness-mem daemon** | 記憶の remote storage (main / working) | OpenCode から独立 |
 
 ## データフロー
 
-1. クライアントの opencode が LiteLLM に LLM リクエスト (公開 IP, 仮想キー)
-2. セッション中の記憶読み書きは harness-mem MCP → daemon (Tailscale, トークン)
-3. daemon は SQLite に observation / session / fact を永続化
-4. 定期コンソリデーションで記憶を統合・事実抽出
+1. **通常作業** — OpenCode local session のみ (harness-mem アクセスなし)
+2. **記憶を残したい** → ユーザーが「記憶して」発話 → memory-commit skill → curl HTTP POST
+3. **過去を思い出したい** → ユーザーが「思い出して」発話 → harness-recall skill → curl HTTP GET
+4. **crash 後の復旧** → OpenCode が local session を restore (harness-mem 不使用)
+
+## 主要な決定事項
+
+- **MCP は使用しない**: Memory 読み書きは global skill + curl + HTTP API ベース
+- **明示 commit**: 自動記録ではなく、ユーザーが「記憶して」と言ったときのみ harness-mem へ保存
+- **OpenCode は独立**: crash recovery は OpenCode の local history で完結。harness-mem は「長期的に残したいもの」のみ
+- **harness-mem は remote service**: OpenCode の常時 context ではなく、必要時だけ呼び出す独立した service

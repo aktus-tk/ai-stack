@@ -23,10 +23,8 @@ cp .env.example .env
 
 | 変数 | 説明 |
 |---|---|
-| `LITELLM_API_KEY` | opencode から litellm への接続キー (LiteLLM UI で発行) |
+| `OPENCODE_API_KEY` | OpenCode Go ゲートウェイの API キー |
 | `HARNESS_MEM_ADMIN_TOKEN` | harness-mem daemon の認証トークン |
-| `POSTGRES_PASSWORD` | 既存 litellm DB のパスワード (移行時は `litellm`) |
-| `LITELLM_MASTER_KEY` / `LITELLM_SALT_KEY` / `UI_PASSWORD` | LiteLLM 本体の鍵 |
 | `CADDY_BIND_IP` / `CADDY_PORT` | 入口の Tailscale IP (既定 100.92.131.75:8090) |
 | `CADDY_BASIC_AUTH_USER` / `CADDY_BASIC_AUTH_HASH` | basic auth (ハッシュは caddy hash-password で生成) |
 
@@ -43,8 +41,6 @@ docker compose up -d
 
 | service | 役割 | ホストへの公開 |
 |---|---|---|
-| `postgres` | LiteLLM 用 PostgreSQL | なし (compose 内のみ) |
-| `litellm` | LLM ゲートウェイ | 移行期間中のみ `127.0.0.1:4000` |
 | `harness-memd` | harness-mem 記憶 daemon | なし |
 | `opencode-server` | web/mobile 向け headless サーバー | なし (caddy 経由) |
 | `caddy` | 唯一の入口 (basic auth + reverse proxy) | `100.92.131.75:8090` |
@@ -101,11 +97,9 @@ docker compose ps
 
 ## 補足: ハードニング
 
-- 4000 / 37888 / 5432 / 4096 はホストへ publish しない。唯一の入口は Caddy。
+- 37888 / 37889 / 4096 はホストへ publish しない。唯一の入口は Caddy。
 - Caddy は Tailscale IP にのみ bind し、basic auth を強制する。
   Tailscale ACL で iPhone などのノードのみ許可するのが望ましい。
-- 移行完了後は litellm の `ports: 127.0.0.1:4000:4000` を削除する。
-- LiteLLM の image tag は `latest` でなくリリースタグに固定推奨 (`LITELLM_IMAGE_TAG`)。
 
 ## 関連
 

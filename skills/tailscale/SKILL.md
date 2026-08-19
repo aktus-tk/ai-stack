@@ -12,8 +12,8 @@ Tailscale メッシュの運用知識。harness-mem daemon へのアクセスは
 
 ## 何を壊してはいけないか
 
-1. **サーバーの Tailscale を止めない** — harness-mem daemon への唯一のアクセス経路。
-   `tailscale down` するとクライアントから記憶にアクセスできなくなる。
+1. **サーバーの Tailscale を止めない** — remote memory service (harness-mem daemon) への唯一のアクセス経路。
+   `tailscale down` するとクライアントからメモリにアクセスできなくなる。
 2. **harness-mem daemon の bind を Tailscale IP に保つ** — 公開 IP にバインドを移すと
    認証なしの外部アクセス経路ができる。ACL か auth 設定が整うまで変更しない。
 3. **ノードを削除する前に**、そのノードを利用するサービスがないか確認する。
@@ -46,19 +46,19 @@ Tailscale admin console (https://login.tailscale.com/admin/acls) で
 {
   "src": ["autogroup:member"],
   "dst": ["100.92.131.75"],
-  "ip":  ["tcp:37888", "tcp:4000", "tcp:8090"]
+  "ip":  ["tcp:37888", "tcp:37889", "tcp:8090"]
 }
 ```
 
 | ポート | 用途 |
 |---|---|
-| `tcp:37888` | harness-mem daemon (自宅 opencode の MCP) |
-| `tcp:4000` | LiteLLM (自宅 opencode の LLM proxy) |
+| `tcp:37888` | harness-mem daemon (remote memory service, HTTP API) |
+| `tcp:37889` | harness-mem working daemon (remote memory service, HTTP API) |
 | `tcp:8090` | Caddy (opencode-server への入口) |
 
 - 追加ポートが必要になったらこの ACL に追記し、このドキュメントも更新する。
-- harness-mem daemon (`100.92.131.75:37888`) へのアクセスを
-  必要なクライアントのみに限定するのが推奨。
+- harness-mem daemon (`100.92.131.75:37888` / `37889`) へのアクセスは、
+  global skill (memory-commit / harness-recall) 経由で行われ、必要なクライアントのみが HTTP API で接続。
 
 ## 関連
 

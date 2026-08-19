@@ -1,8 +1,6 @@
 # ai-stack compose.yaml
 # サーバー上の AI 関連コンポーネントをすべて Docker Compose で管理する。
 #
-#   postgres          LiteLLM 用 PostgreSQL (既存 volume 再利用) [2026-08: 未使用のためコメントアウト]
-#   litellm           LLM ゲートウェイ [2026-08: 未使用のためコメントアウト]
 #   harness-memd      harness-mem 記憶 daemon (main / 長期記憶)
 #   harness-memd-working harness-mem 記憶 daemon (working / 作業記憶)
 #   opencode          CLI (都度 run)
@@ -10,48 +8,12 @@
 #   caddy             Tailscale 経由の入口 (basic auth + reverse proxy)
 #
 # ポート方針: public へ publish しない。Tailscale IP (100.92.131.75) への bind
-# (4000 / 37888 / 37889) は自宅 opencode からの接続用。caddy
+# (37888 / 37889) は自宅 opencode からの接続用。caddy
 # (100.92.131.75:<CADDY_PORT>) が主要な外部入口。
 
 name: ai-stack
 
 services:
-  # 未使用のためコメントアウト (2026-08)
-  # postgres:
-  #   image: postgres:16
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_USER: litellm
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
-  #     POSTGRES_DB: litellm
-  #   volumes:
-  #     # 既存 LiteLLM のデータを引き継ぐ (litellm compose が持つ volume)
-  #     - litellm_postgres_data:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U litellm"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
-  #   # ポートは公開しない
-
-  # 未使用のためコメントアウト (2026-08)
-  # litellm:
-  #   image: docker.litellm.ai/berriai/litellm-database:${LITELLM_IMAGE_TAG:-latest}
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   ports:
-  #     - 100.92.131.75:4000:4000
-  #   environment:
-  #     LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set in .env}
-  #     LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?set in .env}
-  #     UI_USERNAME: ${UI_USERNAME:-admin}
-  #     UI_PASSWORD: ${UI_PASSWORD:?set in .env}
-  #     DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@postgres:5432/litellm
-  #     STORE_MODEL_IN_DB: "True"
-  #   # 自宅 opencode から接続するため Tailscale IP に bind。
-
   harness-memd:
     build:
       context: .
@@ -127,7 +89,6 @@ services:
     restart: unless-stopped
     working_dir: /workspace
     environment:
-      LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:?set in .env}
       HARNESS_MEM_HOST: harness-memd
       HARNESS_MEM_PORT: "37888"
@@ -145,9 +106,6 @@ services:
       - /home/tk/backups:/home/tk/backups:ro
     command: ["opencode", "web", "--hostname", "0.0.0.0", "--port", "4096"]
     depends_on:
-      # litellm はコメントアウト済みのため依存も無効化 (2026-08)
-      # litellm:
-      #   condition: service_started
       harness-memd:
         condition: service_started
       harness-memd-working:
@@ -161,7 +119,7 @@ services:
     profiles: ["cli"]
     working_dir: /workspace
     environment:
-      LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:?set in .env}
       HARNESS_MEM_HOST: harness-memd
       HARNESS_MEM_PORT: "37888"
       HARNESS_MEM_ADMIN_TOKEN: ${HARNESS_MEM_ADMIN_TOKEN:?set in .env}
@@ -178,9 +136,6 @@ services:
       - ./config/opencode/opencode.json:/etc/opencode/opencode.json:ro
       - /home/tk/backups:/home/tk/backups:ro
     depends_on:
-      # litellm はコメントアウト済みのため依存も無効化 (2026-08)
-      # litellm:
-      #   condition: service_started
       harness-memd:
         condition: service_started
 
@@ -198,12 +153,3 @@ services:
     volumes:
       - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
     # 唯一の外部入口
-
-# 未使用のためコメントアウト (2026-08)
-# volumes:
-#   litellm_postgres_data:
-#     # 既存 litellm compose の volume を再利用
-#     external: true
-#     name: litellm_postgres_data
-#  opencode_data:
-#  opencode_config:

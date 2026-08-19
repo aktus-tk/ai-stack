@@ -22,8 +22,8 @@ opencode
 
 | ファイル | 役割 |
 |---|---|
-| `config/opencode/opencode.json` | プロバイダー・モデル・MCP 設定 (compose 内 mount) |
-| `docker/opencode/Dockerfile` | opencode + harness-mem MCP を含む image |
+| `config/opencode/opencode.json` | プロバイダー・モデル設定 (compose 内 mount) |
+| `docker/opencode/Dockerfile` | opencode image ビルド定義 |
 | `scripts/opencode` | CLI 起動 wrapper |
 
 ## 何を壊してはいけないか
@@ -36,24 +36,26 @@ opencode
    bind mount と一致させるため。`HOME=/root` だとセッション引継ぎが効かなくなる。
 4. **WSL + mouse 選択の問題** — opencode はマウスイベントを捕捉するため、ターミナルの
    マウス選択コピーが効かなくなる。`tui.json` の `"mouse": false` で無効化できる。
-5. **MCP 環境変数は daemon の接続先と一致させる** — compose 内では `HARNESS_MEM_HOST=harness-memd`。
 
 ## モデル切り替え
 
 - TUI 内で `/models` → モデル選択
-- `config/opencode/opencode.json` の `provider.litellm.models` に追加されたモデルが候補に現れる
+- `config/opencode/opencode.json` の `provider.opencode-go.models` (OpenCode Go ゲートウェイのモデルが候補に現れる)
 
 ## セッションについて
 
 - 会話は `~/.local/share/opencode/opencode.db` (bind mount) に保存。
   再起動後は `opencode --continue` かセッション一覧から復元。
-- harness-mem が記憶レイヤーを担う。opencode の履歴は daemon が自動取り込みする。
+- long-term memory が必要な場合は、ユーザーが「記憶して」と発話したときだけ
+  harness-mem に保存される（memory-commit skill 経由）。
+- crash からの復旧は OpenCode local session で完結。
 
 ## TUI と tmux スクロール
 
 - opencode は vim 同様 **オルトスクリーン (alt screen)** で描画するため、
   tmux のスクロールバックに記録されない。これは正常な動作。
-- 履歴を見るには opencode 内でセッションを開き直すか、harness-mem を検索する。
+- セッション内のやり取りを後で確認するには opencode 内でセッションを開き直すか、
+  必要に応じて「思い出して」と発話して harness-mem から取得する。
 - tmux でスクロールさせたい場合は alt screen 無効化が可能だが描画に副作用あり:
   ```
   set -ga terminal-overrides ",*:smcup@:rmcup@"

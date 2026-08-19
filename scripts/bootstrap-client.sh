@@ -7,11 +7,10 @@
 # 使い方:
 #   ./scripts/bootstrap-client.sh
 #
-# 前提: Tailscale 参加済み・LITELLM_API_KEY が環境に設定済み
+# 前提: Tailscale 参加済み・OPENCODE_API_KEY が環境に設定済み
 
 set -euo pipefail
 
-SERVER_LITELLM_URL="${SERVER_LITELLM_URL:-http://162.43.21.240:4000/v1}"
 SERVER_MEM_HOST="${HARNESS_MEM_HOST:-100.92.131.75}"
 SERVER_MEM_PORT="${HARNESS_MEM_PORT:-37888}"
 
@@ -39,7 +38,7 @@ if [ -f "$CONFIG" ]; then
 else
   echo "[info] 雛形をコピー: このスクリプトは単純コピーのみ。config/client/opencode.json.example を参照"
   cp "$(dirname "$0")/../config/client/opencode.json.example" "$CONFIG"
-  echo "[warn] ${CONFIG} の HARNESS_MEM_ADMIN_TOKEN と LITELLM_API_KEY を実値に設定してください"
+  echo "[warn] ${CONFIG} の HARNESS_MEM_ADMIN_TOKEN と OPENCODE_API_KEY を実値に設定してください"
 fi
 
 # 4. 検証

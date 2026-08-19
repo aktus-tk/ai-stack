@@ -1,8 +1,12 @@
 # Skill: zagens 運用
 
 Zagens (agent harness for DeepSeek V4, v0.9.0) を既存 OpenCode と並行利用するための運用知識。
-LLM (OpenCode Go / DeepSeek V4) と memory (harness-mem MCP) を OpenCode と共通化し、
-**Agent Harness だけを比較する**構成。セットアップ手順は `runbooks/setup-zagens.md` を参照。
+LLM (OpenCode Go / DeepSeek V4) を共通化し、**Agent Harness ・ memory 接続方式が異なる**構成。
+
+- **OpenCode**: global skill + HTTP API でメモリ接続 (MCP 不使用)
+- **Zagens**: stdio MCP でメモリ接続 (OpenCode と独立)
+
+セットアップ手順は `runbooks/setup-zagens.md` を参照。
 
 ## 実行方法
 
@@ -22,6 +26,7 @@ cd ~/zagen && direnv exec . ./bin/zagens doctor                   # 診断 (conf
    `DEEPSEEK_API_KEY` は既存 `~/opencode/.envrc` の `OPENCODE_API_KEY` と同値 (OpenCode Go 共用)。
 2. **既存 OpenCode 設定を変更・削除しない** — `~/.config/opencode/opencode.json` /
    `~/opencode/.envrc` / harness-mem daemon・DB はそのまま。
+   OpenCode は global skill ベースなので、Zagens の MCP 設定と共存可能。
 3. **`harness-working` の wrapper を外さない** — Zagens v0.9.0 は stdio MCP の env 値に
    `{env:VAR}` 展開**非対応**。`bin/harness-working-wrapper.sh` が `HARNESS_MEM_WORKING_*` を
    `HARNESS_MEM_*` にリマップしてから harness-mcp-server を起動している。これを外すと

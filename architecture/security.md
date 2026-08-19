@@ -2,7 +2,7 @@
 
 ## 原則
 
-1. **公開面を最小化**: 外部に出すのは LiteLLM (:4000) のみ。harness-mem は Tailscale 内のみ。
+1. **公開面を最小化**: 外部に出すのは Caddy のみ。harness-mem は Tailscale 内のみ。
 2. **トークン認証を必須化**: 全 API アクセスはトークンで認証。
 3. **シークレットはリポジトリ外**: リポジトリには `.env.example` のみ。実値は各ノードの
    非公開ファイル (`~/.envrc`, systemd unit, `~/.harness-mem/config.json`)。
@@ -11,7 +11,6 @@
 
 | レイヤー | 対策 |
 |---|---|
-| LiteLLM | 仮想キー (`LITELLM_API_KEY`) 必須。マスターキー・ソルトキーは Docker .env に保存 |
 | harness-mem | Tailscale バインド + `HARNESS_MEM_ADMIN_TOKEN` (Bearer) |
 | Tailscale | メッシュ暗号化。ACL でノード間アクセスを制御可能 |
 | ネットワーク | harness-mem daemon は公開 IP に一切バインドしない |
@@ -39,13 +38,10 @@
 
 | シークレット | 配置場所 | コミット禁止 |
 |---|---|---|
-| `LITELLM_API_KEY` | `~/.envrc` (クライアント) | ✅ |
-| `LITELLM_MASTER_KEY` / `LITELLM_SALT_KEY` | `~/docker/litellm/.env` (サーバー) | ✅ |
+| `OPENCODE_API_KEY` | `~/.envrc` 等 (クライアント) / `.env` (サーバー) | ✅ |
 | `HARNESS_MEM_ADMIN_TOKEN` | systemd unit `Environment=` (サーバー) | ✅ |
-| LiteLLM UI パスワード | `~/docker/litellm/.env` | ✅ |
 
 ## 監査・ログ
 
 - harness-mem: `~/.harness-mem/daemon.log`, `~/.harness-mem/harness-mem-ui.log`
 - systemd journal: `journalctl -u harness-memd`
-- LiteLLM: Docker ログ (`docker compose logs litellm`)

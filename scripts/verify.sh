@@ -2,10 +2,9 @@
 # verify.sh — ai-stack (Docker Compose) 環境の健全性チェック
 #
 # 検証項目:
-#   1. コンテナ稼働状態 (postgres/litellm/harness-memd/harness-memd-working/opencode-server/caddy)
-#   2. LiteLLM への疎通 (compose 内 litellm:4000 → /v1/models)
-#   3. harness-mem daemon への疎通 (compose 内 harness-memd:37888 → /health)
-#   3b. harness-mem working daemon への疎通 (37889 → /health)
+#   1. コンテナ稼働状態 (harness-memd / harness-memd-working / opencode-server / caddy)
+#   2. harness-mem daemon への疎通 (compose 内 harness-memd:37888 → /health)
+#   3. harness-mem working daemon への疎通 (37889 → /health)
 #   4. harness-mem DB の整合性 (main / working の integrity_check)
 #   5. Caddy (Tailscale 経由の入口) の basic auth
 #   6. security boundary: 公開ポートが意図したものだけであること
@@ -45,7 +44,7 @@ parse_env() {
 parse_env
 
 echo "== 1. コンテナ稼働状態 =="
-services=(postgres litellm harness-memd harness-memd-working opencode-server caddy)
+services=(harness-memd harness-memd-working opencode-server caddy)
 for svc in "${services[@]}"; do
   state=$(docker compose ps --status running --format '{{.Name}} {{.State}}' "$svc" 2>/dev/null || true)
   if [ -n "$state" ]; then
@@ -61,19 +60,7 @@ if [ "$QUICK" = "--quick" ]; then
   exit $fail
 fi
 
-echo "== 2. LiteLLM 疎通 =="
-# LiteLLM は Tailscale IP (100.92.131.75:4000) に bind。
-LITELLM_HOST="${LITELLM_VERIFY_URL:-http://100.92.131.75:4000}"
-code=$(curl -s -o /dev/null -w "%{http_code}" -m 5 \
-  "${LITELLM_HOST}/v1/models" -H "Authorization: Bearer ${LITELLM_API_KEY}" || echo 000)
-if [ "$code" = "200" ]; then
-  echo "[ok] LiteLLM reachable (http ${code})"
-else
-  echo "[ng] LiteLLM http=${code}"
-  fail=1
-fi
-
-echo "== 3. harness-mem daemon 疎通 (harness-memd:37888) =="
+echo "== 2. harness-mem daemon 疎通 (harness-memd:37888) =="
 # Tailscale IP 経由で確認 (自宅 opencode からの接続経路と同じ)
 if curl -s -m 5 http://100.92.131.75:37888/health 2>/dev/null | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
   echo "[ok] harness-mem daemon healthy (Tailscale IP)"
@@ -82,7 +69,7 @@ else
   fail=1
 fi
 
-echo "== 3b. harness-mem working daemon 疎通 (harness-memd-working:37889) =="
+echo "== 3. harness-mem working daemon 疎通 (harness-memd-working:37889) =="
 if curl -s -m 5 http://100.92.131.75:37889/health 2>/dev/null | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
   echo "[ok] harness-mem working daemon healthy (Tailscale IP)"
 else
@@ -116,12 +103,12 @@ else
 fi
 
 echo "== 6. security boundary =="
-# 公開 bind (0.0.0.0 / 公開IP) に 4000/37888/37889/5432/4096 が無いこと
-# 例外: litellm:4000 / harness-memd:37888 / harness-memd-working:37889 は Tailscale IP のみに
+# 公開 bind (0.0.0.0 / 公開IP) に 37888/37889/4096 が無いこと
+# 例外: harness-memd:37888 / harness-memd-working:37889 は Tailscale IP のみに
 #       bind (自宅 opencode 用)。ここでは 0.0.0.0 でなければ OK。
-leaked=$(ss -tlnp 2>/dev/null | grep -E "0.0.0.0:(4000|37888|37889|5432|4096)" || true)
+leaked=$(ss -tlnp 2>/dev/null | grep -E "0.0.0.0:(37888|37889|4096)" || true)
 if [ -z "$leaked" ]; then
-  echo "[ok] 4000/37888/37889/5432/4096 は public (0.0.0.0) に露出していない"
+  echo "[ok] 37888/37889/4096 は public (0.0.0.0) に露出していない"
 else
   echo "[ng] 公開ポート漏れ: ${leaked}"
   fail=1
