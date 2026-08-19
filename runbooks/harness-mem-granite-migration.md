@@ -269,3 +269,122 @@ Durable backups remain under `/home/tk/backups/harness-mem/`.
 Other post-migration hygiene (unrelated to embedding): journald vacuum, docker builder
 prune, apt clean, and old Claude versions — see the local plan
 `/home/tk/opencode/granite-cleanup-plan.md` (not in this repo).
+
+---
+
+## 9. Known Issue — Project Boundary Check Bug (2026-08-20)
+
+**Symptom:** `/v1/search` with `project` parameter (even fullpath) returns
+`vector_candidates: 0` / `final: 0` despite observations existing with granite vectors.
+
+**Root cause:** `observation-store.ts:4361` post-filter compares `normalizedProject`
+(a single basename value) against observation's project field. SQL layer uses
+`projectMembers` (fullpath array from config), but the post-filter uses
+`normalizedProject` (single basename) — causing all candidates to be excluded.
+
+```
+SQL layer:  projectMembers: ["/home/tk", "/home/tk/github/aktus-tk/ai-stack"] → finds candidates ✓
+Post-filter: normalizedProject: "ai-ops" (single basename) → excludes all candidates ✗
+```
+
+**Verified 2026-08-20:**
+- `vector_candidates: 15` with cross-project search (`strict_project: false`)
+- `vector_candidates: 0` with project scope (`project: "/home/tk/github/aktus-tk/ai-stack"`)
+- Workaround: use `strict_project: false` for search (cross-project default)
+
+**Impact:**
+- **Memory-commit:** ✅ Records work (fullpath used)
+- **Harness-recall (cross-project):** ✅ Works (lexical + vector)
+- **Harness-recall (single-project):** ⚠️ Vector candidates not found (boundary check bug)
+- **Resume-pack:** ✅ Works (no project parameter needed)
+
+**Workaround:** Default to cross-project search (`strict_project: false`) which bypasses
+the boundary check. Vector coverage is lower (0.2–0.3) but lexical match is strong.
+
+**Upstream fix needed:** Change `observation-store.ts:4361` to use `projectMembers`
+instead of `normalizedProject` for boundary check. File:
+`/usr/local/lib/node_modules/@chachamaru127/harness-mem/memory-server/src/core/observation-store.ts`
+
+---
+
+## 10. Cross-Project Search Configuration (2026-08-20)
+
+**Decision:** Enable cross-project (horizontal) search by default in harness-recall.
+
+**Rationale:** Users typically want to search across all projects, not just the current
+project. Vector search with project scope is weaker due to boundary check bug (§9).
+
+### Default Search Behavior
+
+| Parameter | Value | Effect |
+|---|---|---|
+| `strict_project` | `false` | All projects searched |
+| `project` | (omitted) | No project filter |
+| `limit` | 20 | More results from broader search |
+| `debug` | `true` | Include vector search metadata |
+
+### Command Examples
+
+```bash
+# Cross-project search (default)
+curl -s -X POST -H 'content-type: application/json' \
+  -d '{"query":"<keywords>","limit":20,"strict_project":false}' \
+  http://100.92.131.75:37888/v1/search
+
+# Single-project search (optional, semantic priority)
+curl -s -X POST -H 'content-type: application/json' \
+  -d '{"query":"<keywords>","project":"/home/tk/github/aktus-tk/ai-stack","limit":10,"debug":true}' \
+  http://100.92.131.75:37888/v1/search
+```
+
+### Response Format Differences
+
+| Field | Cross-Project | Single-Project |
+|---|---|---|
+| `lexical_candidates` | High (63+) | Low (varies) |
+| `vector_candidates` | Low (15) | None (0, bug) |
+| `vector_coverage` | 0.17–0.30 | 0 |
+| `scores.vector` | Low (0.0–0.5) | None |
+| Priority | Lexical (keyword) | Semantic (vector) |
+
+**Note:** Cross-project search has lower vector coverage by design (`internalLimit: 15`),
+but lexical match is strong. Single-project search has higher semantic priority but is
+affected by boundary check bug (§9).
+
+---
+
+## 11. Skill Updates (2026-08-20)
+
+### Files Modified
+
+| File | Change | Commit |
+|---|---|---|
+| `~/.agents/skills/memory-commit/SKILL.md` | PROJECT: basename → fullpath | `f59a8a5` |
+| `~/.agents/skills/harness-recall/SKILL.md` | Cross-project default + routing update | `15c03a2` |
+| `.agents/skills/memory-commit.md` | Repo copy sync | `f59a8a5` |
+| `.agents/skills/harness-recall.md` | Repo copy sync | `15c03a2` |
+| `skills/harness-mem/SKILL.md` | Operational guide | (pending) |
+
+### Key Changes
+
+1. **memory-commit:**
+   - `PROJECT` variable changed from basename (`ai-ops`) to fullpath (`$(pwd)`)
+   - All curl/harness-mem-client.sh examples updated
+   - Verified: Fullpath works correctly (`final: 4` items returned)
+
+2. **harness-recall:**
+   - Default search: cross-project (`strict_project: false`)
+   - Removed `project` parameter from resume-pack, sessions/list, search/facets
+   - Response format updated with two variants (cross-project vs single-project)
+   - Examples: curl + harness-mem-client.sh both support cross-project
+
+3. **Git Commits:**
+   - `f59a8a5`: Use fullpath for project scope in memory-commit & harness-recall
+   - `15c03a2`: Cross-project search by default in harness-recall
+
+### Testing Results
+
+- **Cross-project search:** ✅ 10 results from multiple projects (lexical: 63, vector: 15)
+- **Single-project search:** ⚠️ Vector candidates: 0 (boundary check bug, §9)
+- **Memory-commit:** ✅ 6 observations recorded successfully
+- **Vector search:** ✅ Granit embedding active (`embedding_provider: local`)
