@@ -55,6 +55,45 @@ ai-stack
 
 IaC(Terraform)にすべてを寄せず、「意図 + コード」として環境を宣言的に管理するのが目的。
 
+## harness-mem Granite embedding フロー
+
+harness-mem の観測 (observation) は **Granite embedding** (`local:granite-embedding-311m-r2`,
+dim=384) でベクトル化され、lexical (FTS) + vector (semantic) の hybrid 検索に使われる。
+
+```
+【write path】観測保存 → granite vector
+  /v1/events/record で保存
+        │  (保存直後は fallback: local-hash-v3 vector が生成される)
+        ▼
+  POST /v1/admin/reindex-vectors   ← 手動実行 (limit: 新規観測数 or 100)
+        │  (working daemon は scheduler 無効のため手動必須)
+        ▼
+  granite vector 登録完了 (vector_coverage: 1 / migration_complete: true)
+
+【read path】検索 → semantic match
+  query
+        │  (クエリは自動的に Granite embedding へ変換 — 手動生成不要)
+        ▼
+  POST /v1/search {query, project, limit, debug:true}   ← project scope 必須
+        │
+        ▼
+  lexical (FTS) + vector (semantic) hybrid ranking
+        │
+        ▼
+  meta: vector_search_enabled / vector_candidates / vector_coverage / vector_model
+  items[i].scores: lexical / vector / final
+```
+
+**重要な挙動**:
+
+- **保存直後は fallback vector**。granite への変換は `/v1/admin/reindex-vectors` の手動実行が必要
+  (working daemon は reindex scheduler 無効。main は有効だが converged 済み)。
+- **検索は必ず project scope 付きで実行する**。スコープなしだと `vector_coverage < 0.2` となり
+  vector 重み付けが無効化される (実測: `scores.vector: 0.000`)。
+- **read path のクエリ embedding は自動生成**。検索時に手動の変換作業は不要。
+- 詳細: `skills/harness-mem/SKILL.md` / `runbooks/harness-mem-granite-migration.md` /
+  `docs/granite-embedding-verification.md`
+
 ## クイックスタート
 
 サーバー (162.43.21.240) の構築は `runbooks/bootstrap-server.md` を参照。
