@@ -43,7 +43,7 @@ trigger_phrases:
    - 明示指示 or durable な決定 (architecture / policy / convention / security): **main** (`HARNESS_MEM_HOST` / `HARNESS_MEM_PORT` / `HARNESS_MEM_ADMIN_TOKEN`)
    - 判断に迷う場合は working を選択。
 
-4. **プロジェクト名** — cwd のリポジトリ名 (`ai-ops` など)。session_id は現在セッションの ID を付与 (あれば)。
+4. **プロジェクト名** — cwd の**フルパス** (例: `/home/tk/github/aktus-tk/ai-stack`)。basename ではなくフルパスを使用する（harness-mem 内部の project boundary check で basename を使うと post-filter で全候補が除外される既知バグのため）。session_id は現在セッションの ID を付与 (あれば)。
 
 5. **保存** — カテゴリごとに `/v1/events/record` を POST (バッチ)。1 回の commit で全部を詰め込まず、意味単位で分割する。
 
@@ -127,7 +127,7 @@ curl -s -X POST \
 HARNESS_MEM_HOST=100.92.131.75
 HARNESS_MEM_PORT=37889          # working
 HARNESS_MEM_ADMIN_TOKEN=$HARNESS_MEM_WORKING_ADMIN_TOKEN
-PROJECT="ai-ops"
+PROJECT="$(pwd)"                # フルパスを使用（basename ではなく）
 SESSION_ID="<現在のセッションID>"
 
 # 各カテゴリを 1 event ずつ POST
@@ -145,10 +145,6 @@ RESP=$(curl -s -X POST \
     }
   }" \
   "http://$HARNESS_MEM_HOST:$HARNESS_MEM_PORT/v1/events/record")
-
-# 保存確認: items[0].id を抽出 (保存成功の証跡)
-OBS_ID=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin)['items'][0]['id'])")
-echo "saved observation: $OBS_ID"
 ```
 
 ### 保存 → Granite vector 登録 (一気通貫の例)
@@ -157,7 +153,7 @@ echo "saved observation: $OBS_ID"
 HARNESS_MEM_HOST=100.92.131.75
 HARNESS_MEM_PORT=37889          # working (既定)
 HARNESS_MEM_ADMIN_TOKEN=$HARNESS_MEM_WORKING_ADMIN_TOKEN
-PROJECT="ai-ops"
+PROJECT="$(pwd)"                # フルパスを使用
 SESSION_ID="<現在のセッションID>"
 
 # 1. 保存 (複数 event を POST する場合はここで batch 化)
@@ -204,17 +200,17 @@ print(f\"migration_complete: {d['meta'].get('migration_complete')} / embedding_p
 ### harness-mem-client.sh (どちらの store にも)
 
 ```bash
-# working へ
+# working へ（PROJECT はフルパスで指定）
 HARNESS_MEM_HOST=100.92.131.75 HARNESS_MEM_PORT=37889 \
 HARNESS_MEM_ADMIN_TOKEN="$HARNESS_MEM_WORKING_ADMIN_TOKEN" \
   harness-mem-client.sh record-event \
-  '{"event":{"platform":"opencode","project":"ai-ops","session_id":"<SESSION_ID>","event_type":"decision","payload":{"title":"...","content":"..."},"tags":["memory_commit","decision"]}}'
+  '{"event":{"platform":"opencode","project":"'"$(pwd)"'","session_id":"<SESSION_ID>","event_type":"decision","payload":{"title":"...","content":"..."},"tags":["memory_commit","decision"]}}'
 
 # main へ (長期/昇格)
 HARNESS_MEM_HOST=100.92.131.75 HARNESS_MEM_PORT=37888 \
 HARNESS_MEM_ADMIN_TOKEN="$HARNESS_MEM_ADMIN_TOKEN" \
   harness-mem-client.sh record-event \
-  '{"event":{"platform":"opencode","project":"ai-ops","session_id":"<SESSION_ID>","event_type":"decision","payload":{"title":"...","content":"..."},"tags":["memory_commit","decision"]}}'
+  '{"event":{"platform":"opencode","project":"'"$(pwd)"'","session_id":"<SESSION_ID>","event_type":"decision","payload":{"title":"...","content":"..."},"tags":["memory_commit","decision"]}}'
 ```
 
 ### event_type の使い分け (payload.title / payload.content を設定)

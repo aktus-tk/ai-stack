@@ -41,7 +41,8 @@ trigger_phrases:
 | session 内詳細 | GET `/v1/sessions/thread?session_id=...` | token 不要 |
 | Context Box | ~~cb_recall / cb_search~~ | **DROP** (本環境では未設定) |
 
-- プロジェクト名は cwd のリポジトリ名 (`ai-ops` など)。
+- **プロジェクト名は cwd の**フルパス** (`$(pwd)` 推奨)。basename ではなくフルパスを使用する**
+  （harness-mem 内部の project boundary check で basename を使うと post-filter で全候補が除外される既知バグのため）。
 - **`/v1/search` は必ず `project` スコープ付き + `debug: true` で実行する。**
   スコープなしの広域検索は `internalLimit` が 15 に制限され `vector_coverage < 0.2` となり
   **vector 重み付けが無効化**される (実測: `scores.vector: 0.000`)。project スコープ付きなら
@@ -53,16 +54,16 @@ trigger_phrases:
 
 ```bash
 curl -s -X POST -H 'content-type: application/json' \
-  -d '{"project":"ai-ops","detail_level":"L1"}' \
+  -d '{"project":"'"$(pwd)"'","detail_level":"L1"}' \
   http://100.92.131.75:37888/v1/resume-pack
 ```
 
 ### search (キーワード / 既知問題 / 意味検索 — Granite embedding 統合)
 
 ```bash
-# project スコープ + debug:true で vector search メタを取得
+# project スコープ（フルパス使用）+ debug:true で vector search メタを取得
 curl -s -X POST -H 'content-type: application/json' \
-  -d '{"query":"<キーワード>","project":"ai-ops","limit":10,"debug":true}' \
+  -d '{"query":"<キーワード>","project":"'"$(pwd)"'","limit":10,"debug":true}' \
   http://100.92.131.75:37888/v1/search
 ```
 
@@ -88,19 +89,19 @@ curl -s -X POST -H 'content-type: application/json' \
 ### sessions/list (直近 session)
 
 ```bash
-curl -s 'http://100.92.131.75:37888/v1/sessions/list?project=ai-ops'
+curl -s 'http://100.92.131.75:37888/v1/sessions/list?project='"$(pwd)"
 ```
 
 ### search/facets (絞り込み)
 
 ```bash
-curl -s 'http://100.92.131.75:37888/v1/search/facets?project=ai-ops&query=<キーワード>'
+curl -s 'http://100.92.131.75:37888/v1/search/facets?project='"$(pwd)"'&query=<キーワード>'
 ```
 
 ### sessions/thread (session 内詳細)
 
 ```bash
-curl -s 'http://100.92.131.75:37888/v1/sessions/thread?session_id=<SESSION_ID>&project=ai-ops'
+curl -s 'http://100.92.131.75:37888/v1/sessions/thread?session_id=<SESSION_ID>&project='"$(pwd)"
 ```
 
 ### decisions / 方針 (SSOT)
@@ -112,13 +113,13 @@ cat ~/.claude/memory/decisions.md 2>/dev/null || echo "decisions.md は未作成
 ### harness-mem-client.sh (search / resume-pack — POST 系は動作確認済み)
 
 ```bash
-# search (main) — debug:true 付きで vector search メタを取得
+# search (main) — debug:true 付きで vector search メタを取得（project はフルパス）
 HARNESS_MEM_HOST=100.92.131.75 HARNESS_MEM_PORT=37888 \
-  harness-mem-client.sh search '{"query":"<キーワード>","project":"ai-ops","limit":10,"debug":true}'
+  harness-mem-client.sh search '{"query":"<キーワード>","project":"'"$(pwd)"'","limit":10,"debug":true}'
 
 # resume-pack
 HARNESS_MEM_HOST=100.92.131.75 HARNESS_MEM_PORT=37888 \
-  harness-mem-client.sh resume-pack '{"project":"ai-ops","detail_level":"L1"}'
+  harness-mem-client.sh resume-pack '{"project":"'"$(pwd)"'","detail_level":"L1"}'
 ```
 
 > 注: 本環境の `harness-mem-client.sh` は **GET 系コマンド (sessions-list / session-thread / search-facets) に既知バグ** があり、
