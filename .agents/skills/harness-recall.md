@@ -32,36 +32,48 @@ trigger_phrases:
 
 | intent | 呼び出し | 備考 |
 |---|---|---|
-| resume / 続き | POST `/v1/resume-pack` `{project, detail_level:L1}` | token 不要 |
+| resume / 続き | POST `/v1/resume-pack` (project パラメータなし) | 全プロジェクト対象・token 不要 |
 | decisions / 方針 | `~/.claude/memory/decisions.md` | SSOT。存在しなければその旨を回答 |
-| 既知問題 (harness-mem 内検索) | POST `/v1/search` `{query, project, limit, debug:true}` | token 不要。project scope 必須 (vector 有効化のため) |
-| 直近 session | GET `/v1/sessions/list?project=...` | token 不要 |
-| キーワード | POST `/v1/search` `{query, project, limit, debug:true}` | token 不要。project scope 必須 |
-| facets 絞り込み | GET `/v1/search/facets?project=...&query=...` | token 不要 |
-| session 内詳細 | GET `/v1/sessions/thread?session_id=...` | token 不要 |
+| 横断検索（デフォルト） | POST `/v1/search` `{query, limit, strict_project:false}` | **全プロジェクト対象** (横断検索重視、lexical 優先) |
+| 特定プロジェクト検索 | POST `/v1/search` `{query, project, limit, debug:true}` | 単一プロジェクト限定（semantic 優先、vector スコア有効） |
+| 直近 session | GET `/v1/sessions/list` (project パラメータなし) | 全プロジェクト・token 不要 |
+| facets 絞り込み | GET `/v1/search/facets?query=...` (project パラメータなし) | 全プロジェクト対象 |
 | Context Box | ~~cb_recall / cb_search~~ | **DROP** (本環境では未設定) |
 
-- **プロジェクト名は cwd の**フルパス** (`$(pwd)` 推奨)。basename ではなくフルパスを使用する**
-  （harness-mem 内部の project boundary check で basename を使うと post-filter で全候補が除外される既知バグのため）。
-- **`/v1/search` は必ず `project` スコープ付き + `debug: true` で実行する。**
-  スコープなしの広域検索は `internalLimit` が 15 に制限され `vector_coverage < 0.2` となり
-  **vector 重み付けが無効化**される (実測: `scores.vector: 0.000`)。project スコープ付きなら
-  `vector_coverage: 1` (100%) で vector スコアが最終順位に反映される。
+**デフォルト: 横断検索** (`strict_project: false`)
+- すべてのプロジェクトから該当する観測を検索
+- lexical (FTS) が優先（keyword match が強い）
+- vector スコアは計算されるが重み付けが低い（internalLimit 制限のため）
+- 使用例: 「deepseek」「過去に何やった」「granite embedding」など、プロジェクト横断で思い出したい場合
+
+**オプション: 単一プロジェクト検索** (`project: "$(pwd)"`, `debug: true`)
+- 現在のプロジェクト内のみ検索
+- vector スコアが有効（semantic matching が強い）
+- 使用例: 「このプロジェクトで前にやった ai-stack 関連の作業」など、特定プロジェクト内で思い出したい場合
 
 ## コマンド例 (全て token 不要)
 
-### resume-pack (続き)
+### resume-pack (続き、全プロジェクト対象)
 
 ```bash
 curl -s -X POST -H 'content-type: application/json' \
-  -d '{"project":"'"$(pwd)"'","detail_level":"L1"}' \
+  -d '{"detail_level":"L1"}' \
   http://100.92.131.75:37888/v1/resume-pack
 ```
 
-### search (キーワード / 既知問題 / 意味検索 — Granite embedding 統合)
+### search (デフォルト: 横断検索、全プロジェクト対象)
 
 ```bash
-# project スコープ（フルパス使用）+ debug:true で vector search メタを取得
+# 全プロジェクトから横断検索（strict_project: false で全対象）
+curl -s -X POST -H 'content-type: application/json' \
+  -d '{"query":"<キーワード>","limit":20,"strict_project":false}' \
+  http://100.92.131.75:37888/v1/search
+```
+
+### search (オプション: 特定プロジェクト限定、semantic 優先)
+
+```bash
+# 現在のプロジェクト内のみ検索（fullpath + debug:true で vector スコア有効化）
 curl -s -X POST -H 'content-type: application/json' \
   -d '{"query":"<キーワード>","project":"'"$(pwd)"'","limit":10,"debug":true}' \
   http://100.92.131.75:37888/v1/search
@@ -69,33 +81,32 @@ curl -s -X POST -H 'content-type: application/json' \
 
 レスポンスから抽出する項目:
 
-| 場所 | フィールド | 意味 | 正常時の値 |
-|---|---|---|---|
-| `meta` | `vector_search_enabled` | vector search 有効フラグ | `true` |
-| `meta` | `vector_candidates` | vector 検索で見つかった候補数 | > 0 |
-| `meta` | `lexical_candidates` | FTS (キーワード) 候補数 | 任意 |
-| `meta` | `vector_coverage` | project scope 内の vector カバレッジ | `1` (100%) |
-| `meta` | `embedding_provider` | 埋め込みプロバイダ | `local` |
-| `meta` | `vector_model` | 埋め込みモデル | `local:granite-embedding-311m-r2` |
-| `meta` | `embedding_provider_status` | プロバイダ健康状態 | `healthy` |
-| `items[i].scores.lexical` | FTS スコア (キーワード寄与) | 0.0–1.0 |
-| `items[i].scores.vector` | vector スコア (semantic 寄与) | 0.0–1.0 |
-| `items[i].scores.final` | 最終スコア (hybrid 合成) | 0.0–1.0 |
+| 場所 | フィールド | 意味 | 横断検索時 | 単一プロジェクト時 |
+|---|---|---|---|---|
+| `meta` | `vector_search_enabled` | vector search 有効フラグ | `true` | `true` |
+| `meta` | `vector_candidates` | vector 検索で見つかった候補数 | ≥ 0 (制限あり) | > 0 |
+| `meta` | `lexical_candidates` | FTS (キーワード) 候補数 | 通常多い | 少ない |
+| `meta` | `vector_coverage` | vector カバレッジ | < 0.2（無視） | `1` (100%) |
+| `meta` | `embedding_provider` | 埋め込みプロバイダ | `local` | `local` |
+| `meta` | `vector_model` | 埋め込みモデル | `local:granite-embedding-311m-r2` | `local:granite-embedding-311m-r2` |
+| `items[i].scores.lexical` | FTS スコア | キーワード寄与 | 高（重視される） | 低 |
+| `items[i].scores.vector` | vector スコア | semantic 寄与 | 低（計算されるが重み低い） | 高 |
+| `items[i].scores.final` | 最終スコア | hybrid 合成 | lexical ベース | vector ベース |
 
 実測 (e2e, working `37889`): `vector_search_enabled: true` / `vector_candidates: 1` /
 `vector_coverage: 1` / `vector_model: local:granite-embedding-311m-r2` /
 `embedding_provider: local` / `scores.vector: 1.0`。
 
-### sessions/list (直近 session)
+### sessions/list (直近 session、全プロジェクト対象)
 
 ```bash
-curl -s 'http://100.92.131.75:37888/v1/sessions/list?project='"$(pwd)"
+curl -s 'http://100.92.131.75:37888/v1/sessions/list'
 ```
 
-### search/facets (絞り込み)
+### search/facets (絞り込み、全プロジェクト対象)
 
 ```bash
-curl -s 'http://100.92.131.75:37888/v1/search/facets?project='"$(pwd)"'&query=<キーワード>'
+curl -s 'http://100.92.131.75:37888/v1/search/facets?query=<キーワード>'
 ```
 
 ### sessions/thread (session 内詳細)
@@ -113,13 +124,13 @@ cat ~/.claude/memory/decisions.md 2>/dev/null || echo "decisions.md は未作成
 ### harness-mem-client.sh (search / resume-pack — POST 系は動作確認済み)
 
 ```bash
-# search (main) — debug:true 付きで vector search メタを取得（project はフルパス）
+# search (横断検索 — 全プロジェクト対象)
 HARNESS_MEM_HOST=100.92.131.75 HARNESS_MEM_PORT=37888 \
-  harness-mem-client.sh search '{"query":"<キーワード>","project":"'"$(pwd)"'","limit":10,"debug":true}'
+  harness-mem-client.sh search '{"query":"<キーワード>","limit":20,"strict_project":false}'
 
-# resume-pack
+# resume-pack (全プロジェクト対象)
 HARNESS_MEM_HOST=100.92.131.75 HARNESS_MEM_PORT=37888 \
-  harness-mem-client.sh resume-pack '{"project":"'"$(pwd)"'","detail_level":"L1"}'
+  harness-mem-client.sh resume-pack '{"detail_level":"L1"}'
 ```
 
 > 注: 本環境の `harness-mem-client.sh` は **GET 系コマンド (sessions-list / session-thread / search-facets) に既知バグ** があり、
@@ -127,34 +138,54 @@ HARNESS_MEM_HOST=100.92.131.75 HARNESS_MEM_PORT=37888 \
 
 ## 出力フォーマット
 
-以下の形式で回答する (source を明示、vector search のメタ情報を含める):
+以下の形式で回答する (source を明示、search モードを明記):
+
+### 横断検索時（デフォルト）
 
 ```
-source: daemon main `/v1/search` (Granite embedding + lexical hybrid)
-vector_search: enabled / <vector_candidates> semantic candidates / coverage <vector_coverage*100>%
-embedding_model: local:granite-embedding-311m-r2 (dim=384) / provider: local / status: healthy
+source: daemon main `/v1/search` (cross-project lexical + vector hybrid)
+search_mode: cross-project / strict_project: false
+query_scope: all projects
+lexical_match: <N> candidates / vector_match: <M> candidates (制限あり)
+embedding_model: local:granite-embedding-311m-r2 (dim=384)
+
+summary: <要約>
+results:
+- obs_XXX: "<title>" [<project>] (lexical:<lexical>, vector:<vector>, final:<final>)
+- obs_YYY: "<title>" [<project>] (lexical:<lexical>, vector:<vector>, final:<final>)
+
+details:
+- Keyword match で <N> 件検出
+- Vector (semantic) 補助で ranking 調整
+- プロジェクト横断的に検索
+```
+
+### 単一プロジェクト検索時（オプション）
+
+```
+source: daemon main `/v1/search` (single-project semantic + lexical hybrid)
+search_mode: single-project / project: <fullpath>
+query_scope: current project only
+vector_search: enabled / <vector_candidates> semantic candidates / coverage 100%
+embedding_model: local:granite-embedding-311m-r2 (dim=384)
+
 summary: <要約>
 results:
 - obs_XXX: "<title>" (lexical:<lexical>, vector:<vector>, final:<final>)
 - obs_YYY: "<title>" (lexical:<lexical>, vector:<vector>, final:<final>)
-details:
-- Vector search で <N> 件の semantic match を発見
-- Session: <session_id> 内で <N> 件
-- <observation id / session id などの追跡情報>
-```
 
-- source には「daemon main の `/v1/search` (Granite embedding + lexical hybrid)」「working の `/v1/resume-pack`」「`~/.claude/memory/decisions.md`」のように、情報源の API 名 or ファイルを明記する。
-- **vector_search 行で「意味検索 (vector)」と「キーワード検索 (lexical/FTS)」の寄与度を明記**する。
-  `scores.vector` が高い (= semantic 貢献) 項目と `scores.lexical` が高い (= キーワード一致) 項目を分けて示す。
-- `meta.vector_candidates` が 0 の場合は「vector 候補なし (project scope 内に該当なし or 未変換観測のみ)」と明記する。
-- 得られた observation の `id` や `session_id` を details に残すと、後続の検証や追跡に役立つ。
+details:
+- Semantic match で <M> 件検出（vector score 有効）
+- 当該プロジェクト内のみ検索
+```
 
 ## 注意点
 
+- **デフォルト: 横断検索** (`strict_project: false`)。すべてのプロジェクトから検索。
+- **オプション: 単一プロジェクト検索**。`project: "$(pwd)"` + `debug: true` を指定して、特定プロジェクト内で semantic 優先検索。
 - 検索系は token 不要だが、`graph/neighbors` のみ admin token が必要。使用時は `x-harness-mem-token: $HARNESS_MEM_ADMIN_TOKEN` を付ける。
 - Context Box (cb_recall / cb_search) は DROP。harness-mem 内の検索は `/v1/search` / `/v1/recall` で行う。
 - 回答は source を明示し、推測と事実を分ける。観測された observation に無い情報は「メモリに見つからなかった」と明記する。
 - decisions intent は `~/.claude/memory/decisions.md` を SSOT として参照し、存在しなければその旨を回答する。
-- **`/v1/search` は必ず project スコープ付きで実行する**。スコープなしだと `vector_coverage < 0.2` となり
-  vector 重み付けが無効化され、semantic 検索の効果が出ない (既知の設計挙動)。
+- 横断検索時：lexical (keyword) が優先され、vector スコアは計算されるが重み付けが低い（internalLimit 制限）。semantic match が必要な場合は単一プロジェクト検索を使う。
 - `scores.vector: 0` の項目は「未変換 (fallback vector) or スコープ外」の可能性がある。report ではその旨を注記する。
