@@ -1,5 +1,72 @@
 # アーキテクチャ概要
 
+## エージェント構成
+
+```text
+User (Architect)
+      │
+      ▼
+┌─────────────────────────────────────────────────────────┐
+│  Director (primary agent, DeepSeek V4 Flash)            │
+│                                                         │
+│  責務:                                                   │
+│  - ユーザー意図の理解・タスク分解                         │
+│  - Engineer / QA への delegation                        │
+│  - 結果統合・最終報告                                    │
+│                                                         │
+│  Escalation (自律判断しない):                            │
+│  - architecture / security boundary / data-model        │
+│  - major technology selection / significant trade-offs  │
+│                                                         │
+│  Memory: harness-mem main (長期記憶)                    │
+└────────────────┬───────────────────┬────────────────────┘
+                 │                   │
+        ┌────────▼────────┐ ┌────────▼────────┐
+        │    Engineer     │ │       QA        │
+        │   (subagent)    │ │   (subagent)    │
+        │                 │ │                 │
+        │ implementation  │ │ adversarial     │
+        │ investigation   │ │ review          │
+        │ debugging       │ │ verification    │
+        │ testing         │ │                 │
+        │                 │ │ 問題発見→報告   │
+        │ Memory: working │ │ Memory: working │
+        └─────────────────┘ └─────────────────┘
+```
+
+### 責務境界
+
+| エージェント | 自律実行 OK | Escalate |
+|-------------|------------|----------|
+| Director | タスク分解、delegation、結果統合 | architecture, security, data-model, major trade-offs |
+| Engineer | implement, investigate, debug, test, verify | scope expansion, architecture change, destructive ops |
+| QA | review, verify, 問題報告 | 大規模修正（報告のみ、自動修正しない） |
+
+### Configuration SSOT Structure
+
+```text
+Git repository
+├── AGENTS.md                        ← global agent policy
+└── config/opencode/
+    ├── opencode.json                ← agent definitions / config
+    ├── instructions/
+    │   └── memory-policy.md         ← instructions (AGENTS.md への参照)
+
+         ↓ symlink
+
+~/.config/opencode/
+├── AGENTS.md                        → /path/to/repo/AGENTS.md
+├── opencode.json                    → /path/to/repo/config/opencode/opencode.json
+└── instructions                     → /path/to/repo/config/opencode/instructions
+```
+
+**更新フロー**:
+1. `git pull` (repository 更新)
+2. symlink 経由で runtime へ自動反映（追加の deploy/sync 不要）
+
+**Setup**:
+- 初期セットアップ: `scripts/deploy-opencode-config.sh` (idempotent)
+
 ## 全体像
 
 ```

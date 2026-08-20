@@ -40,18 +40,38 @@ curl -fsSL https://opencode.ai/install | bash
 # または npm: npm install -g opencode-ai
 ```
 
-### 5. opencode.json 生成
+### 5. opencode config symlink setup
 
-`config/client/opencode.json.example` を `~/.config/opencode/opencode.json` にコピー。
-プロバイダー(OpenCode Go)の接続先を設定する。
+Git repository を SSOT とした symlink 方式を使用。
 
 ```bash
-mkdir -p ~/.config/opencode
-cp config/client/opencode.json.example ~/.config/opencode/opencode.json
-# ${env:OPENCODE_API_KEY} が読めるよう環境変数を設定済みであること
+./scripts/deploy-opencode-config.sh
+# または bootstrap-client.sh が自動実行
 ```
 
-**注**: MCP セクションは不要。OpenCode は global skill ベースで harness-mem に HTTP API で接続する。
+最終的な構成:
+
+```text
+Git repository (SSOT)
+  config/opencode/
+  ├── opencode.json
+  ├── instructions/
+  │   └── memory-policy.md
+  └── AGENTS.md
+
+       ↓ symlink
+
+~/.config/opencode/
+  ├── opencode.json         → repository の config/opencode/opencode.json
+  ├── instructions          → repository の config/opencode/instructions
+  └── AGENTS.md             → repository の AGENTS.md
+```
+
+- **SSOT**: Git repository の `config/opencode/`
+- **Runtime**: `~/.config/opencode/` (symlink via setup script)
+- **Update method**: `git pull` 後、symlink は自動反映（deploy script 不要）
+
+**注**: MCP は意図的に無効化。OpenCode は global skill ベースで harness-mem に HTTP API で接続する。
 
 ### 6. TUI 設定 (WSL でマウス選択したい場合)
 

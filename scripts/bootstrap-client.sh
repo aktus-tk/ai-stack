@@ -28,18 +28,12 @@ else
   echo "[ok] opencode already installed: $(opencode --version 2>/dev/null || echo unknown)"
 fi
 
-# 3. opencode.json (既存を壊さない)
-echo "== 3. opencode.json =="
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
-CONFIG="$CONFIG_DIR/opencode.json"
-mkdir -p "$CONFIG_DIR"
-if [ -f "$CONFIG" ]; then
-  echo "[info] ${CONFIG} 既存あり。手動で確認してください"
-else
-  echo "[info] 雛形をコピー: このスクリプトは単純コピーのみ。config/client/opencode.json.example を参照"
-  cp "$(dirname "$0")/../config/client/opencode.json.example" "$CONFIG"
-  echo "[warn] ${CONFIG} の HARNESS_MEM_ADMIN_TOKEN と OPENCODE_API_KEY を実値に設定してください"
-fi
+# 3. opencode config symlink setup
+echo "== 3. opencode config setup =="
+SCRIPT_DIR="$(dirname "$0")"
+"$SCRIPT_DIR/deploy-opencode-config.sh" --force
+echo "[info] OpenCode config symlink setup complete"
+echo "[info] OPENCODE_API_KEY は環境変数で設定してください (実値を config に書かない)"
 
 # 4. 検証
 echo "== 4. 検証 =="

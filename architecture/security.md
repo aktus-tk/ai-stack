@@ -39,9 +39,10 @@
 | シークレット | 配置場所 | コミット禁止 |
 |---|---|---|
 | `OPENCODE_API_KEY` | `~/.envrc` 等 (クライアント) / `.env` (サーバー) | ✅ |
-| `HARNESS_MEM_ADMIN_TOKEN` | systemd unit `Environment=` (サーバー) | ✅ |
+| `HARNESS_MEM_ADMIN_TOKEN` | `.env` (サーバー、Docker Compose 経由で注入) | ✅ |
+| `HARNESS_MEM_WORKING_ADMIN_TOKEN` | `.env` (サーバー、Docker Compose 経由で注入) | ✅ |
 
 ## 監査・ログ
 
-- harness-mem: `~/.harness-mem/daemon.log`, `~/.harness-mem/harness-mem-ui.log`
-- systemd journal: `journalctl -u harness-memd`
+- harness-mem (Docker): `docker logs ai-stack-harness-memd-1` / `ai-stack-harness-memd-working-1`
+- opencode-server: `docker logs ai-stack-opencode-server-1`

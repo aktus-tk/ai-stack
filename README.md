@@ -13,6 +13,38 @@ AI エージェント(Claude Code / opencode / Codex など)が安全に動作�
 | harness-mem | remote memory service (HTTP API) — main (long-term) / working (working) の2系統 | サーバー (ai-stack compose) |
 | Tailscale | サーバー⇔クライアント間の暗号化 VPN メッシュ | 全ノード |
 
+## Operating Model
+
+### エージェント構成
+
+```text
+User (Architect)
+      ↓
+Director (DeepSeek V4 Flash)
+  ├── Engineer (subagent)
+  └── QA (subagent)
+```
+
+- **Director**: ユーザー意図の理解、タスク分解、delegation、結果統合。architecture/security/data-model 等の重要判断は Architect へ escalate
+- **Engineer**: implementation / investigation / debugging / testing。Director から委譲されたタスクを実行し、検証結果を報告
+- **QA**: adversarial review。Engineer の実装を独立検証し、問題があれば報告（自動修正はしない）
+
+エージェント定義の SSOT: `config/opencode/opencode.json`（`~/.config/opencode/opencode.json` は symlink）
+
+### Memory 構成
+
+| store | 用途 | 利用者 |
+|-------|------|--------|
+| main (37888) | 長期記憶: architecture decision, policy, 再利用可能な知識 | Director |
+| working (37889) | 作業記憶: 調査途中の情報、仮説、一時的な作業記憶 | Engineer / QA |
+
+**設計上の意図**:
+- **MCP 無効化**: skill + HTTP API + curl で on-demand アクセス（tool schema の常時 context 消費を回避）
+- **明示 commit**: ユーザーが「記憶して」と言ったときのみ保存。自動記録はしない
+- **cross-project recall**: プロジェクト横断検索がデフォルト（意図的な設計）
+
+詳細: `architecture/overview.md`
+
 ## レポジトリ構成
 
 ```
