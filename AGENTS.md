@@ -195,3 +195,7 @@ docker compose restart harness-memd-working
 # opencode CLI (Docker 版)
 opencode            # 任意のディレクトリで起動
 ```
+
+## RHEMS Redmine
+
+RHEMS Redmine (`https://redmine.rhems-japan.net/`) の Issue 参照・検索・作成・更新・コメント操作を行う場合は、`rhems-redmine` Skill を使用すること。認証は `$REDMINE_API_KEY`、本文は Textile 形式。
