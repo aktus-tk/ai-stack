@@ -65,7 +65,10 @@ Memory policy (明示 commit 方式):
 - crash 復旧は OpenCode local session で完結
 ```
 
-参照: `~/.agents/skills/memory-commit/SKILL.md`, `~/.agents/skills/harness-recall/SKILL.md`
+**重要**: 長期記憶への記録時は、必ず `harness-mem-commit` Skill でベクトル化もセットで実行する。
+vector embedding なしでは proximity search が機能しない。
+
+参照: `skills/harness-mem-commit/SKILL.md`, `skills/harness-recall/SKILL.md`
 
 ## 作業ポリシー
 
