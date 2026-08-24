@@ -206,6 +206,15 @@ docker compose restart harness-memd-working
 opencode            # 任意のディレクトリで起動
 ```
 
+## Skill の継続的改善
+
+- 作業中に試行錯誤を行い、最終的に有効な手順・回避策・制約・注意点が判明した場合は、作業完了時に関連する Skill を見直す。
+- 今回得られた知見が、同種の作業でも再利用可能かを判断する。
+- 再利用可能で、既存 Skill に不足・誤り・曖昧さがある場合は Skill を更新する。
+- 一時的な障害、偶発的な挙動、対象環境だけに依存する情報は、一般的な手順として Skill に追加しない。
+- 失敗した試行をそのまま手順として残さず、「何が有効だったか」「何を避けるべきか」が分かる形に整理する。
+- Skill 更新後は、既存の記述と矛盾していないこと、不要な重複が増えていないことを確認する。
+
 ## RHEMS Redmine
 
 RHEMS Redmine (`https://redmine.rhems-japan.net/`) の Issue 参照・検索・作成・更新・コメント操作を行う場合は、`rhems-redmine` Skill を使用すること。認証は `$REDMINE_API_KEY`、本文は Textile 形式。
