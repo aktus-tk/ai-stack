@@ -1,7 +1,8 @@
 # Skill: Backlog API
 
 RHEMS Backlog (`https://rhems-bl.backlog.com/`) の Issue 参照・検索・作成・更新・コメント操作を行う Skill。
-認証は `$BACKLOG_API_KEY`。
+認証はクエリパラメータ `?apiKey=` で `$BACKLOG_API_KEY` を渡す。
+**注意**: `Authorization: Bearer` ヘッダー方式は使えない。クエリパラメータ方式のみ。
 
 ## 基本設定
 
@@ -10,6 +11,9 @@ SPACE="https://rhems-bl.backlog.com"
 API_KEY="$BACKLOG_API_KEY"
 API_BASE="${SPACE}/api/v2"
 ```
+
+認証は全リクエストにクエリパラメータ `?apiKey=${API_KEY}` を付与する。
+(`Authorization: Bearer` ヘッダーでは認証できない)
 
 ## エンドポイント一覧
 
@@ -53,8 +57,7 @@ API_BASE="${SPACE}/api/v2"
 
 ```bash
 curl -X GET \
-  "${API_BASE}/projects" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/projects?apiKey=${API_KEY}"
 ```
 
 レスポンス例:
@@ -74,8 +77,7 @@ curl -X GET \
 ```bash
 PROJ_ID=12345
 curl -X GET \
-  "${API_BASE}/projects/${PROJ_ID}" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/projects/${PROJ_ID}?apiKey=${API_KEY}"
 ```
 
 ### 3. 課題タイプ一覧（プロジェクトごと）
@@ -83,8 +85,7 @@ curl -X GET \
 ```bash
 PROJ_ID=12345
 curl -X GET \
-  "${API_BASE}/projects/${PROJ_ID}/issueTypes" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/projects/${PROJ_ID}/issueTypes?apiKey=${API_KEY}"
 ```
 
 レスポンス例:
@@ -105,8 +106,7 @@ curl -X GET \
 
 ```bash
 curl -X GET \
-  "${API_BASE}/priorities" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/priorities?apiKey=${API_KEY}"
 ```
 
 レスポンス例:
@@ -122,8 +122,7 @@ curl -X GET \
 
 ```bash
 curl -X GET \
-  "${API_BASE}/statuses" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/statuses?apiKey=${API_KEY}"
 ```
 
 レスポンス例:
@@ -140,13 +139,11 @@ curl -X GET \
 ```bash
 # 条件付きで検索
 curl -X GET \
-  "${API_BASE}/issues?projectId=12345&offset=0&count=100" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/issues?projectId=12345&offset=0&count=100&apiKey=${API_KEY}"
 
 # JQL-like フィルター
 curl -X GET \
-  "${API_BASE}/issues?projectIds[]=12345&statusId[]=1" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/issues?projectIds[]=12345&statusId[]=1&apiKey=${API_KEY}"
 ```
 
 パラメータ:
@@ -161,8 +158,7 @@ curl -X GET \
 ```bash
 ISSUE_KEY="TEST-123"
 curl -X GET \
-  "${API_BASE}/issues/${ISSUE_KEY}" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/issues/${ISSUE_KEY}?apiKey=${API_KEY}"
 ```
 
 ### 8. 課題作成
@@ -173,8 +169,7 @@ ISSUE_TYPE_ID=11      # バグの ID を取得してから使用
 PRIORITY_ID=3         # 優先度の ID を取得してから使用
 
 curl -X POST \
-  "${API_BASE}/issues" \
-  -H "Authorization: Bearer ${API_KEY}" \
+  "${API_BASE}/issues?apiKey=${API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "projectId": '${PROJ_ID}',
@@ -192,8 +187,7 @@ ISSUE_KEY="TEST-123"
 
 # ステータス更新
 curl -X PATCH \
-  "${API_BASE}/issues/${ISSUE_KEY}" \
-  -H "Authorization: Bearer ${API_KEY}" \
+  "${API_BASE}/issues/${ISSUE_KEY}?apiKey=${API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "statusId": 2,
@@ -206,8 +200,7 @@ curl -X PATCH \
 ```bash
 ISSUE_KEY="TEST-123"
 curl -X GET \
-  "${API_BASE}/issues/${ISSUE_KEY}/comments" \
-  -H "Authorization: Bearer ${API_KEY}"
+  "${API_BASE}/issues/${ISSUE_KEY}/comments?apiKey=${API_KEY}"
 ```
 
 ### 11. コメント追加
@@ -215,8 +208,7 @@ curl -X GET \
 ```bash
 ISSUE_KEY="TEST-123"
 curl -X POST \
-  "${API_BASE}/issues/${ISSUE_KEY}/comments" \
-  -H "Authorization: Bearer ${API_KEY}" \
+  "${API_BASE}/issues/${ISSUE_KEY}/comments?apiKey=${API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "content": "コメントの内容"
@@ -252,6 +244,7 @@ curl -X POST \
 401 Unauthorized
 ```
 → API キーが正しいか、`$BACKLOG_API_KEY` が設定されているか確認
+→ **`Authorization: Bearer` ヘッダーではなく、クエリパラメータ `?apiKey=` で認証すること**
 
 ### リソースが見つからない
 ```
