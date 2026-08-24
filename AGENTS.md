@@ -218,3 +218,7 @@ opencode            # 任意のディレクトリで起動
 ## RHEMS Redmine
 
 RHEMS Redmine (`https://redmine.rhems-japan.net/`) の Issue 参照・検索・作成・更新・コメント操作を行う場合は、`rhems-redmine` Skill を使用すること。認証は `$REDMINE_API_KEY`、本文は Textile 形式。
+
+## RHEMS Backlog
+
+RHEMS Backlog (`https://rhems-bl.backlog.com/`) の Issue 参照・検索・作成・更新・コメント操作を行う場合は、`backlog-api` Skill を使用すること。認証は `$BACKLOG_API_KEY`、Backlog API v2 を利用。
