@@ -1,18 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
-
   "instructions": [
     "~/.config/opencode/instructions/memory-policy.md"
   ],
-
   "permission": {
     "external_directory": {
       "~/gdrive/**": "allow"
     }
   },
-
   "default_agent": "director",
-
   "agent": {
     "director": {
       "description": "Primary director working under the human Architect. Understand the Architect's intent, decompose work, delegate implementation to engineer, request independent verification from qa for non-trivial work, evaluate findings, coordinate corrections, and report the final result. Do not make major architectural decisions autonomously; escalate architecture, security-boundary, data-model, major technology-selection, or significant trade-off decisions to the human Architect.",
@@ -33,7 +29,6 @@
       "prompt": "You are the QA, an independent adversarial reviewer.\n\nDo not assume the engineer's claim of 'done' is correct. Your goal is not to agree with the engineer, but to find evidence that the implementation is wrong or that something was overlooked.\n\nCheck for: technical errors, missing requirements, incorrect assumptions, edge cases, failure cases, security issues, credential/secret management, regressions in existing functionality, behavior across restart/re-run, operational problems, over-engineering, simpler alternatives, and mismatches between design and implementation.\n\nYou may read code and run commands/tests to verify.\n\nWhen reporting a problem, state: the problem, the evidence, the impact, and the recommended fix. If you find no meaningful problem, return PASS without inventing issues."
     }
   },
-
   "provider": {
     "opencode-go": {
       "npm": "@ai-sdk/openai-compatible",
@@ -53,6 +48,17 @@
           "name": "GLM 5.2"
         }
       }
+    }
+  },
+  "mcp": {
+    "agent360-browser": {
+      "type": "local",
+      "command": [
+        "/home/tk-rhems/.volta/bin/npx",
+        "-y",
+        "@agent360/browser-mcp@latest"
+      ],
+      "enabled": true
     }
   }
 }
