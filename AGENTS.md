@@ -218,6 +218,16 @@ opencode            # 任意のディレクトリで起動
 - 失敗した試行をそのまま手順として残さず、「何が有効だったか」「何を避けるべきか」が分かる形に整理する。
 - Skill 更新後は、既存の記述と矛盾していないこと、不要な重複が増えていないことを確認する。
 
+
+## SSOT 一本化構成** (2026-08-21)
+
+本リポジトリでは ./AGENTS.md を AI Agent / CLI 向けプロジェクト指示の Single Source of Truth (SSOT) とする。
+対象: Claude Code, Cursor CLI(agent), OpenCode(opencode), Antigravity CLI (agy), Codex CLI (codex), CodeBuddy Code (codebuddy-code)
+
+- `./AGENTS.md` がリポジトリルート SSOT
+- 全て `./AGENTS.md` を native auto-detect
+
+
 ## RHEMS Redmine
 
 RHEMS Redmine (`https://redmine.rhems-japan.net/`) の Issue 参照・検索・作成・更新・コメント操作を行う場合は、`rhems-redmine` Skill を使用すること。認証は `$REDMINE_API_KEY`、本文は Textile 形式。
