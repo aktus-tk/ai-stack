@@ -2,6 +2,7 @@
 # deploy-opencode-config.sh — OpenCode config symlink setup (idempotent)
 #
 # SSOT: /home/tk/github/aktus-tk/ai-stack/config/opencode/
+#       + /ai-stack/skills/ (opencode global skills)
 # Runtime: ~/.config/opencode/ (via symlinks)
 #
 # 役割: bootstrap/setup tool として runtime の symlink を構築・検証する
@@ -17,16 +18,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 REPO_CONFIG_DIR="$REPO_ROOT/config/opencode"
 REPO_AGENTS="$REPO_ROOT/AGENTS.md"
+REPO_SKILLS="$REPO_ROOT/skills"
 
 RUNTIME_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 RUNTIME_OPENCODE_JSON="$RUNTIME_CONFIG_DIR/opencode.json"
 RUNTIME_INSTRUCTIONS="$RUNTIME_CONFIG_DIR/instructions"
 RUNTIME_AGENTS="$RUNTIME_CONFIG_DIR/AGENTS.md"
+RUNTIME_SKILLS="$RUNTIME_CONFIG_DIR/skills"
 
 # symlink target (絶対パス)
 TARGET_OPENCODE_JSON="$REPO_CONFIG_DIR/opencode.json"
 TARGET_INSTRUCTIONS="$REPO_CONFIG_DIR/instructions"
 TARGET_AGENTS="$REPO_AGENTS"
+TARGET_SKILLS="$REPO_SKILLS"
 
 usage() {
   cat <<EOF
@@ -57,6 +61,10 @@ if [[ ! -f "$TARGET_OPENCODE_JSON" ]]; then
 fi
 if [[ ! -d "$TARGET_INSTRUCTIONS" ]]; then
   echo "[error] SSOT not found: $TARGET_INSTRUCTIONS"
+  exit 1
+fi
+if [[ ! -d "$TARGET_SKILLS" ]]; then
+  echo "[error] SSOT not found: $TARGET_SKILLS"
   exit 1
 fi
 
@@ -135,6 +143,7 @@ echo "=== Checking OpenCode config symlinks ==="
 setup_symlink "$RUNTIME_OPENCODE_JSON" "$TARGET_OPENCODE_JSON" "opencode.json" || HAS_ERROR=true
 setup_symlink "$RUNTIME_INSTRUCTIONS" "$TARGET_INSTRUCTIONS" "instructions" || HAS_ERROR=true
 setup_symlink "$RUNTIME_AGENTS" "$TARGET_AGENTS" "AGENTS.md" || HAS_ERROR=true
+setup_symlink "$RUNTIME_SKILLS" "$TARGET_SKILLS" "skills" || HAS_ERROR=true
 
 if [[ "$HAS_ERROR" == true ]]; then
   echo ""
