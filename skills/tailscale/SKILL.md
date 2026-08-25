@@ -1,3 +1,8 @@
+---
+name: tailscale
+description: Tailscale メッシュと harness-mem daemon へのネットワーク接続を運用するときに使う。
+---
+
 # Skill: Tailscale 運用
 
 Tailscale メッシュの運用知識。harness-mem daemon へのアクセスはこのネットワーク経由。

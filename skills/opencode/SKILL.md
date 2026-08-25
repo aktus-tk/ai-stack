@@ -1,3 +1,8 @@
+---
+name: opencode
+description: Docker Compose で運用する OpenCode CLI / Server の設定や運用を扱うときに使う。
+---
+
 # Skill: opencode 運用
 
 opencode (対話型 AI エージェント CLI) の設定と運用知識。

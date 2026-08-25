@@ -1,3 +1,8 @@
+---
+name: harness-mem
+description: harness-mem の構成、Granite embedding 統合、write/read path、運用上の制約を確認するときに使う。
+---
+
 # Skill: harness-mem 運用 (Granite embedding 統合)
 
 harness-mem (remote memory service) の運用知識。**Granite embedding 統合後の

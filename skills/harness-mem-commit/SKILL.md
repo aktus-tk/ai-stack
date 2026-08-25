@@ -1,3 +1,8 @@
+---
+name: harness-mem-commit
+description: harness-mem main store へ長期記憶を保存し、ベクトル再インデックスまで実行するときに使う。
+---
+
 # Skill: Harness Memory Commit (with Vector Embedding)
 
 harness-mem main store への observation 記録時に、ベクトル埋め込みも自動実行する手順。
@@ -160,4 +165,3 @@ curl -s -X POST http://harness-memd:37888/v1/admin/reindex-vectors \
 
 ### 403 Unauthorized
 → `$HARNESS_MEM_ADMIN_TOKEN` が正しいか確認
-

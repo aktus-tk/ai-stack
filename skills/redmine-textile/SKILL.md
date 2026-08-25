@@ -1,3 +1,8 @@
+---
+name: redmine-textile
+description: Redmine の journal note を Markdown から正しい Textile 形式へ整形するときに使う。
+---
+
 # Skill: Redmine Textile 整形
 
 Redmine の journal note が Markdown で書かれていて崩れている場合に、

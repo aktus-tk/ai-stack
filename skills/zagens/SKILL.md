@@ -1,3 +1,8 @@
+---
+name: zagens
+description: OpenCode と並行利用する Zagens の構成、実行方法、メモリ接続を扱うときに使う。
+---
+
 # Skill: zagens 運用
 
 Zagens (agent harness for DeepSeek V4, v0.9.0) を既存 OpenCode と並行利用するための運用知識。

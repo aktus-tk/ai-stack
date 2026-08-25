@@ -1,3 +1,8 @@
+---
+name: backlog-api
+description: RHEMS Backlog の Issue を API v2 で参照・検索・作成・更新・コメントするときに使う。
+---
+
 # Skill: Backlog API
 
 RHEMS Backlog (`https://rhems-bl.backlog.com/`) の Issue 参照・検索・作成・更新・コメント操作を行う Skill。
@@ -254,4 +259,3 @@ curl -X POST \
 
 ### レート制限
 Backlog API は同時接続数に制限あり。`curl` での呼び出しは通常範囲内。
-
