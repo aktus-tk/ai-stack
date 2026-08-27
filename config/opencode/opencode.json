@@ -54,7 +54,7 @@
     "agent360-browser": {
       "type": "local",
       "command": [
-        "/home/tk-rhems/.volta/bin/npx",
+        "npx",
         "-y",
         "@agent360/browser-mcp@latest"
       ],
