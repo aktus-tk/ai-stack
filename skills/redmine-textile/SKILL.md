@@ -42,7 +42,47 @@ Redmine 5.1.2 は Textile のみ対応。Markdown 記法はレンダリングさ
 
 ## API 操作
 
-journal note の編集は `PUT /journals/<JOURNAL_ID>.json` を使用する。
+### 1. 新しい journal note の追加（コメント投稿）
+
+```
+PUT /issues/<ISSUE_ID>.json
+Content-Type: application/json
+
+{
+  "issue": {
+    "notes": "... (Textile 形式)"
+  }
+}
+```
+
+**注意**: `status_id` を含めるとステータスも変更される。必要な場合のみ含める。
+
+### 2. 既存 journal note の直接編集（上書き）
+
+```
+PUT /journals/<JOURNAL_ID>.json
+Content-Type: application/json
+
+{
+  "journal": {
+    "notes": "... (Textile 形式)"
+  }
+}
+```
+
+**成功時**: HTTP 204 (No Content) が返る。レスポンスボディは空。
+
+### 3. journal note の削除
+
+REST API では journal note の DELETE はサポートされていない（404 が返る）。
+削除したい場合は内容を空文字列で上書きする:
+
+```
+PUT /journals/<JOURNAL_ID>.json
+Content-Type: application/json
+
+{"journal": {"notes": ""}}
+```
 
 ### 対象特定の注意
 
@@ -50,4 +90,31 @@ URL の `#note-N` は「`notes` が空でない journal の N 番目」に対応
 journal ID を直接指定するため、必ず `GET` で全 journal を取得し、
 内容照合してから `PUT` すること。
 
-詳細な手順・API 呼び出し例は `~/.codebuddy/skills/rhems-redmine/SKILL.md` を参照。
+```
+GET /issues/<ISSUE_ID>.json?include=journals
+```
+
+### 簡易確認コマンド
+
+```bash
+# journal 一覧を表示
+curl -s -H "X-Redmine-API-Key: $REDMINE_API_KEY" \
+  "https://redmine.rhems-japan.net/issues/<ISSUE_ID>.json?include=journals" \
+  | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+for j in data['issue']['journals']:
+    print(f'#{j[\"id\"]}: notes={repr(j[\"notes\"][:80])}')
+"
+
+# 特定 journal の内容を取得（編集用）
+curl -s -H "X-Redmine-API-Key: $REDMINE_API_KEY" \
+  "https://redmine.rhems-japan.net/issues/<ISSUE_ID>.json?include=journals" \
+  | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+for j in data['issue']['journals']:
+    if j['id'] == <JOURNAL_ID>:
+        print(j['notes'])
+"
+```
