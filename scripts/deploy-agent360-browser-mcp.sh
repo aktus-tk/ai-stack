@@ -400,7 +400,7 @@ update_cursor() {
 # 5. codebuddy (~/.codebuddy/.mcp.json)
 # -------------------------------------------------------------
 update_codebuddy() {
-  local target_file="${HOME}/.codebuddy/.mcp.json"
+  local target_file="${HOME}/.codebuddy/mcp.json"
   local tool_name="codebuddy"
   local tmp_file="$TMP_DIR/codebuddy_mcp.json"
 
