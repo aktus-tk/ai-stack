@@ -9,6 +9,14 @@ ChatGPT 共有リンク (`https://chatgpt.com/share/<id>`) の会話を取得し
 **原本 (Markdown) は private repo `aktus-tk/chatgpt` に保存**、**判断・方針だけを
 harness-mem main に要約記録** する手順。
 
+## ルーティング (AGENTS.md)
+
+`https://chatgpt.com/share/<share_id>` が提示されたら本 Skill を起動する (AGENTS.md「ChatGPT 共有リンク」)。
+
+- 原本 → `aktus-tk/chatgpt` repo `conversations/` へ保存し commit/push
+- 判断・方針のみ → harness-mem main へ要約記録 (Granite vector 登録まで)
+- `share_url` は保存しない (`share_id` / `conversation_id` のみ frontmatter に残す)
+
 ## 知識の三層構成 (2026-08-27 決定)
 
 | 層 | 置き場所 | 入れるもの |
@@ -111,11 +119,19 @@ for ts, role, ctype, text in sorted(turns):
 json.dump(messages, open('/tmp/opencode/chatgpt_conversation.json', 'w'), ensure_ascii=False, indent=2)
 ```
 
-**flight 構造メモ**:
-- 各ターンは **2 回出現する** (メイン + ストリーミング表示の重複) → `(ts, role, ctype, text)` で重複排除
-- assistant ターンは `thoughts` → `reasoning_recap` → `code` → `text` の複数 content を持つ
-  → 同一ターン内は `text` だけを連結し、`thoughts` (空) と `code` (ツール実行) は捨てる
-- タイトル・conversation_id は flight 配列内の `title` / `conversation_id` キーから引く
+**flight 構造メモ** (2026-08-29 時点で構造が変化したことを確認):
+- 旧構造 (`_150`/`_154` キー) は現在の共有ページでは **動かない**。以下は 2026-08-29 に実測で動作した新しい構造:
+  - message node: `_146` (message_id: str) / `_147` (message data への参照) / `_149` (parent message_id) / `_151` (children)
+  - message data: `_153` → turn node (`_250` → role: 'user'/'assistant') / `_46` → ts (epoch float) / `_157` → content dict
+  - content dict: `_245` (type: 'text') / `_247` → parts (list of int → data 配列内の文字列 index)
+  - 共有メタデータ (title / conversation_id / create_time) は末尾付近の dict (例: data[44]) にあり、
+    `_45` → title, `_52` → conversation_id, `_46` → create_time
+  - **重複排除は message_id (`_146`) で行う** (メイン + ストリーミング表示で同じ message_id が 2 回出現)
+  - 並び順は ts (`_46`) でソート
+- 動作する抽出スクリプトの実例: `flight_extract9.py` 相当のロジック (message node 収集 → message_id 重複排除 → ts ソート)。
+  タイトル・conversation_id は共有メタデータ dict (`_45`/`_52`) から取得。HTML `<title>` タグからも取得可能。
+- 注意: flight 構造は ChatGPT 側で随時変わりうる。動かなくなったら data 配列内の構造を再調査する
+  (手がかり: 会話本文は data 配列内の長い日本語文字列として存在する)。
 
 ## 手順 2: Markdown 整形 (原本)
 

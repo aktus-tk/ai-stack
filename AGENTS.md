@@ -235,3 +235,7 @@ RHEMS Redmine (`https://redmine.rhems-japan.net/`) の Issue 参照・検索・�
 ## RHEMS Backlog
 
 RHEMS Backlog (`https://rhems-bl.backlog.com/`) の Issue 参照・検索・作成・更新・コメント操作を行う場合は、`backlog-api` Skill を使用すること。認証は `$BACKLOG_API_KEY`、Backlog API v2 を利用。
+
+## ChatGPT 共有リンク
+
+`https://chatgpt.com/share/<share_id>` が提示された場合は `chatgpt-import` Skill を使用する。
