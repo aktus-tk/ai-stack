@@ -119,19 +119,23 @@ for ts, role, ctype, text in sorted(turns):
 json.dump(messages, open('/tmp/opencode/chatgpt_conversation.json', 'w'), ensure_ascii=False, indent=2)
 ```
 
-**flight 構造メモ** (2026-08-29 時点で構造が変化したことを確認):
-- 旧構造 (`_150`/`_154` キー) は現在の共有ページでは **動かない**。以下は 2026-08-29 に実測で動作した新しい構造:
-  - message node: `_146` (message_id: str) / `_147` (message data への参照) / `_149` (parent message_id) / `_151` (children)
-  - message data: `_153` → turn node (`_250` → role: 'user'/'assistant') / `_46` → ts (epoch float) / `_157` → content dict
-  - content dict: `_245` (type: 'text') / `_247` → parts (list of int → data 配列内の文字列 index)
-  - 共有メタデータ (title / conversation_id / create_time) は末尾付近の dict (例: data[44]) にあり、
-    `_45` → title, `_52` → conversation_id, `_46` → create_time
-  - **重複排除は message_id (`_146`) で行う** (メイン + ストリーミング表示で同じ message_id が 2 回出現)
-  - 並び順は ts (`_46`) でソート
-- 動作する抽出スクリプトの実例: `flight_extract9.py` 相当のロジック (message node 収集 → message_id 重複排除 → ts ソート)。
-  タイトル・conversation_id は共有メタデータ dict (`_45`/`_52`) から取得。HTML `<title>` タグからも取得可能。
+**flight 構造メモ** (2026-08-31 時点でさらに構造が変化したことを確認):
+- 2026-08-29 の構造 (`_146`/`_147`/`_149`/`_250` 等) は現在の共有ページでは **動かない**。以下は 2026-08-31 に実測で動作した構造:
+  - 全要素は data 配列 (フラット)。int 値は**データ配列内の index 参照** (1 hop で実値に解決する)
+  - role 文字列は固定位置に存在: `assistant` / `user` / `system` / `tool` (data[380] / [534] / [486] / [452] 付近)
+  - message node: `_151` (message_id: UUID str) / `_158` (→ dict) / `_162` (→ content dict) / `_54` (→ ts: epoch float)
+  - role 解決: `_158` → dict の `_379` → role 文字列
+  - content 解決: `_162` → dict の `_374` = type ('text'/'code'/'thoughts'/'reasoning_recap')、`_376` = parts (list of int → 文字列 index)
+  - 共有メタデータは data[52] 付近の dict: `_53` → pageTitle、`_54` → create_time、`_97` → conversation_id、`_60` → sharedConversationId
+    (title は HTML `<title>` タグ = `ChatGPT - <title>` からも取得可能)
+  - **重複排除は message_id (`_151`) で行う**。並び順は ts (`_54` 解決値) でソート
+  - 抽出時にやること: (1) `_151`/`_158`/`_162`/`_54` を持つ dict を収集 (2) `_54` は index 参照なので `data[idx]` で float に解決
+    (3) role/type/text を解決 (4) `role in ('user','assistant')` かつ type=='text' のみ保存
+  - 除外対象: role='system' (空 text・'Original custom instructions no longer available')、role='tool'、
+    type='code' (検索呼び出し・結果)、'thoughts' / 'reasoning_recap' ('4s考えました' 等)
 - 注意: flight 構造は ChatGPT 側で随時変わりうる。動かなくなったら data 配列内の構造を再調査する
-  (手がかり: 会話本文は data 配列内の長い日本語文字列として存在する)。
+  (手がかり: role 文字列 'user'/'assistant' と type 文字列 'text'/'code'、会話本文は長い日本語文字列として存在)。
+  汎用的な手順: 文字列要素のうち「会話本文の長文」を探し、それを参照する dict を遡って message node を特定する。
 
 ## 手順 2: Markdown 整形 (原本)
 
