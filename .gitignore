@@ -6,3 +6,8 @@
 *.bak-*
 *.token
 !*.env.example
+
+# ローカル実行時の自動生成物 (repo に不要)
+.claude/
+.harness-mem/
+skills/.system/
