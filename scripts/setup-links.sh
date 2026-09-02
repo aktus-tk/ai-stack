@@ -50,6 +50,8 @@ LINKS=(
   "claude skills|$HOME/.claude/skills|$REPO_SKILLS"
   "agy AGENTS.md|$AGY_CONFIG_DIR/AGENTS.md|$REPO_AGENTS"
   "agy skills|$AGY_CONFIG_DIR/skills|$REPO_SKILLS"
+  "deepcode AGENTS.md|$HOME/.deepcode/AGENTS.md|$REPO_AGENTS"
+  "deepcode skills|$HOME/.deepcode/skills|$REPO_SKILLS"
 )
 
 MODE="interactive"
