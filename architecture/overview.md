@@ -65,7 +65,7 @@ Git repository
 2. symlink 経由で runtime へ自動反映（追加の deploy/sync 不要）
 
 **Setup**:
-- 初期セットアップ: `scripts/deploy-opencode-config.sh` (idempotent)
+- 初期セットアップ: `scripts/setup-links.sh` (idempotent; 全エージェント + MCP)
 
 ## 全体像
 

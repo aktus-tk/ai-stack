@@ -40,38 +40,47 @@ curl -fsSL https://opencode.ai/install | bash
 # または npm: npm install -g opencode-ai
 ```
 
-### 5. opencode config symlink setup
+### 5. エージェント設定 symlink + MCP セットアップ
 
 Git repository を SSOT とした symlink 方式を使用。
+全 AI ツール (opencode / codebuddy / codex / cursor / claude / agy) へ
+`AGENTS.md` と `skills/` を共通設定としてリンクする。
 
 ```bash
-./scripts/deploy-opencode-config.sh
-# または bootstrap-client.sh が自動実行
+./scripts/setup-links.sh          # 確認プロンプト付き
+./scripts/setup-links.sh --force  # 確認なしで実行
+./scripts/setup-links.sh --verify # 検証のみ
 ```
 
 最終的な構成:
 
 ```text
 Git repository (SSOT)
+  AGENTS.md
+  skills/
   config/opencode/
   ├── opencode.json
-  ├── instructions/
-  │   └── memory-policy.md
-  └── AGENTS.md
+  └── instructions/
+      └── memory-policy.md
 
        ↓ symlink
 
-~/.config/opencode/
-  ├── opencode.json         → repository の config/opencode/opencode.json
-  ├── instructions          → repository の config/opencode/instructions
-  └── AGENTS.md             → repository の AGENTS.md
+~/.config/opencode/   (opencode)
+~/.codex/             (codex)
+~/.cursor/            (cursor)
+~/.claude/            (claude)
+~/.codebuddy/         (codebuddy)
+~/.gemini/config/     (agy)
+  ├── AGENTS.md       → repository の AGENTS.md
+  ├── skills          → repository の skills/
+  └── (opencode のみ) opencode.json, instructions
 ```
 
-- **SSOT**: Git repository の `config/opencode/`
-- **Runtime**: `~/.config/opencode/` (symlink via setup script)
-- **Update method**: `git pull` 後、symlink は自動反映（deploy script 不要）
-
-**注**: MCP は意図的に無効化。OpenCode は global skill ベースで harness-mem に HTTP API で接続する。
+- **SSOT**: Git repository (`AGENTS.md`, `skills/`, `config/opencode/`)
+- **Runtime**: 各ツールの設定ディレクトリ (symlink via `setup-links.sh`)
+- **Update method**: `git pull` 後、symlink は自動反映（再実行不要）
+- **MCP**: `setup-links.sh` が Agent360 Browser MCP も各ツールへマージする
+  (`--links-only` で MCP をスキップ可能)
 
 ### 6. TUI 設定 (WSL でマウス選択したい場合)
 
@@ -85,27 +94,7 @@ TUI のマウスモードを無効化する (`tui.json`)。
 }
 ```
 
-### 7. Google Drive マウント (任意)
-
-opencode から Google Drive (`~/gdrive`) を読み書きしたい場合は
-`runbooks/mount-gdrive.md` を参照。
-
-```bash
-# rclone を未導入なら
-sudo apt-get install -y rclone fuse3
-
-# OAuth 認証 (初回のみ、ブラウザでの許可が必要)
-rclone config create gdrive drive scope=drive
-
-# マウント
-~/github/aktus-tk/ai-stack/scripts/mount-gdrive.sh
-```
-
-- `~/.bashrc` に `~/bin/mount-gdrive.sh` を追記すると WSL 起動時に自動マウントされる。
-- `config/client/opencode.json.example` の `permission.external_directory` が
-  `~/gdrive/**` へのアクセス許可を付与する。
-
-### 8. 検証
+### 7. 検証
 ```bash
 ./scripts/verify.sh
 ```

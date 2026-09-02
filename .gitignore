@@ -4,6 +4,7 @@
 *.db-wal
 *.db-shm
 *.bak-*
+*.bak.*
 *.token
 !*.env.example
 
