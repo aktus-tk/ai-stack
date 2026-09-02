@@ -40,26 +40,41 @@ harness-mem main に要約記録** する手順。
     basename は project boundary check で落ちる既知バグのため必須
 - reindex: `POST /v1/admin/reindex-vectors` (limit 100)
 
+## 取得方針 (2026-09-02 決定)
+
+ChatGPT share URL の取得では、共有 API / curl 等の直接取得が
+Cloudflare により 403 になることを想定する。
+
+1. 通常の取得方法を**1回だけ**試す
+2. 403 / Cloudflare challenge の場合、**再試行・原因調査を行わず**、
+   直ちに share ページ HTML 取得へフォールバックする
+3. HTML 内の flight data から会話データを抽出する
+4. flight data の構造が既知パターンと異なる場合は、
+   **固定キーに依存せず role / content / message relationship を基準に構造を解析する**
+5. **Browser MCP は HTML 取得も失敗した場合のみ**最終フォールバックとして使用する
+
 ## 手順 1: 共有 JSON の取得
 
 共有 URL の `/share/` を `/backend-api/share/` に置き換えるだけで、会話 JSON が返る。
+**方針 1 に従い、この試行は 1 回だけ** (HTTP コードの追加確認も含めて) 行う。
 
 ```bash
 share_url='https://chatgpt.com/share/<SHARE_ID>'
 api_url="${share_url/\/share\//\/backend-api\/share\/}"
 
 # JSON を一時ファイルへ (後の Markdown 整形・要約に使う)
-curl -sS --compressed --max-time 30 "$api_url" -o /tmp/opencode/chatgpt_share.json
-
-# 失敗したら HTTP コードを確認
-curl -sS --compressed -i --max-time 30 "$api_url" | head -20
+curl -sS --compressed --max-time 30 -o /tmp/opencode/chatgpt_share.json -w "http_code=%{http_code}\n" "$api_url"
 ```
+
+HTTP 200 で JSON が取れたら以降のステップへ。**403 (Cloudflare challenge) なら
+再試行せず、直ちに下記の HTML flight 解析へ進む**。
 
 ### 403 (Cloudflare challenge) 時のフォールバック — HTML flight 解析
 
 **発生条件**: データセンター IP から叩くと Cloudflare の bot challenge
 (`cf-mitigated: challenge`) で `HTTP 403` が返る。自宅 IP なら通ることが多い。
 この場合、`/share/<id>` の HTML ページ自体は 200 で取得できるのでそこから抽出する。
+**方針 2 に従い、UA 変更等の再試行はしない**。
 
 ```bash
 # 1. 共有ページの HTML を取得 (UA 付き)
@@ -76,66 +91,78 @@ html = open('/tmp/opencode/chatgpt_share.html').read()
 calls = re.findall(r'streamController\.enqueue\((.*?)\);\s*</script>', html, re.S)
 payload = ast.literal_eval(calls[0])   # 最初の enqueue に会話データが入っている
 data = json.loads(payload)             # flight 形式のフラット配列
-
-def get(idx):
-    return data[idx] if isinstance(idx, int) and 0 <= idx < len(data) else None
-
-def extract_content(content_obj):
-    ctype = get(content_obj.get('_192'))   # "text" / "code" / "thoughts" / "reasoning_recap"
-    if ctype == 'text':
-        parts_ref = content_obj.get('_194') or content_obj.get('_154')
-        parts = get(parts_ref) if isinstance(parts_ref, int) else parts_ref
-        texts = [get(p) for p in parts if isinstance(get(p), str)] if isinstance(parts, list) else []
-        return 'text', '\n'.join(texts)
-    if ctype == 'reasoning_recap':
-        return 'recap', get(content_obj.get('_154'))
-    if ctype == 'code':
-        return 'code', get(content_obj.get('_193'))
-    return ctype, None
-
-# 全 turn ノードを収集 → (ts, role, ctype, text) で重複排除 → ts でソート
-turns = []
-for el in data:
-    if isinstance(el, dict) and '_150' in el and '_154' in el:
-        msg = get(el['_150'])
-        role = get(msg.get('_197')) if isinstance(msg, dict) else None
-        if role not in ('user', 'assistant'):
-            continue
-        ts = get(el.get('_46'))
-        ctype, text = extract_content(get(el['_154']))
-        turns.append((ts, role, ctype, text))
-
-seen = set()
-messages = []
-for ts, role, ctype, text in sorted(turns):
-    key = (ts, role, ctype, text)
-    if key in seen:
-        continue
-    seen.add(key)
-    if ctype == 'text' and text:
-        messages.append({'role': role, 'text': text})
-
-# messages を /tmp/opencode/chatgpt_conversation.json として保存
-json.dump(messages, open('/tmp/opencode/chatgpt_conversation.json', 'w'), ensure_ascii=False, indent=2)
 ```
 
-**flight 構造メモ** (2026-08-31 時点でさらに構造が変化したことを確認):
-- 2026-08-29 の構造 (`_146`/`_147`/`_149`/`_250` 等) は現在の共有ページでは **動かない**。以下は 2026-08-31 に実測で動作した構造:
-  - 全要素は data 配列 (フラット)。int 値は**データ配列内の index 参照** (1 hop で実値に解決する)
-  - role 文字列は固定位置に存在: `assistant` / `user` / `system` / `tool` (data[380] / [534] / [486] / [452] 付近)
-  - message node: `_151` (message_id: UUID str) / `_158` (→ dict) / `_162` (→ content dict) / `_54` (→ ts: epoch float)
-  - role 解決: `_158` → dict の `_379` → role 文字列
-  - content 解決: `_162` → dict の `_374` = type ('text'/'code'/'thoughts'/'reasoning_recap')、`_376` = parts (list of int → 文字列 index)
-  - 共有メタデータは data[52] 付近の dict: `_53` → pageTitle、`_54` → create_time、`_97` → conversation_id、`_60` → sharedConversationId
-    (title は HTML `<title>` タグ = `ChatGPT - <title>` からも取得可能)
-  - **重複排除は message_id (`_151`) で行う**。並び順は ts (`_54` 解決値) でソート
-  - 抽出時にやること: (1) `_151`/`_158`/`_162`/`_54` を持つ dict を収集 (2) `_54` は index 参照なので `data[idx]` で float に解決
-    (3) role/type/text を解決 (4) `role in ('user','assistant')` かつ type=='text' のみ保存
+# 3. 以降は下記「汎用 flight 解析手順」に従う
+#    (固定キーに依存しない。2026-09-02 時点の実測構造は flight 構造メモ参照)
+
+**flight 構造メモ** (2026-09-02 時点の実測で最新。構造は随時変わりうる):
+- 過去の構造メモ: 2026-08-29 版 (`_146`/`_147`/`_149`/`_250`)・2026-08-31 版 (`_151`/`_158`/`_162`/`_54`)
+  は現在の共有ページでは **動かない**。固定キーを前提にしないこと (方針 4)。
+- **2026-09-02 実測の構造** (info削除提案 share で確認):
+  - 全要素は data 配列 (フラット)。int 値は**データ配列内の index 参照** (1 hop で実値に解決)
+  - message node: `_149` (message_id: UUID str) / `_156` (→ role マーカー dict) / `_160` (→ content dict) / `_54` (→ ts: epoch float)
+  - role 解決: `_156` → dict の `_236` → role 文字列 ('user'/'assistant'/'system'/'tool')
+  - content 解決: `_160` → dict の `_231` = type ('text'/'code'/'thoughts'/'reasoning_recap'/'model_editable_context')、`_233` = parts (list of str を直接持つ場合も、int index の場合もある)
+  - 共有メタデータ: `_53` → pageTitle、`_54` → create_time、`_60` → conversation_id (title は HTML `<title>` タグ = `ChatGPT - <title>` からも取得可能)
+  - **重複排除は message_id (`_149`) で行う**
   - 除外対象: role='system' (空 text・'Original custom instructions no longer available')、role='tool'、
-    type='code' (検索呼び出し・結果)、'thoughts' / 'reasoning_recap' ('4s考えました' 等)
-- 注意: flight 構造は ChatGPT 側で随時変わりうる。動かなくなったら data 配列内の構造を再調査する
-  (手がかり: role 文字列 'user'/'assistant' と type 文字列 'text'/'code'、会話本文は長い日本語文字列として存在)。
-  汎用的な手順: 文字列要素のうち「会話本文の長文」を探し、それを参照する dict を遡って message node を特定する。
+    type='code' (検索呼び出し・結果)、'thoughts' / 'reasoning_recap' ('4s考えました' 等)、'model_editable_context'
+- **順序の注意 (2026-09-02 実測)**: user メッセージの ts は編集により assistant 応答より 1〜2 秒
+  「後」にずれることがある。ts 単純ソートでは assistant が直前の user より先に並ぶ。
+  対処: ts を 1 分単位に丸めたバケット + ロール順 (user 先) でソートし、strict alternation
+  (user/assistant 交互・先頭 user) を検証する。
+- **注意: flight 構造は ChatGPT 側で随時変わりうる**。固定キー (`_149` 等) が見つからない場合は
+  下記の汎用手順で構造を再調査する (手がかり: role 文字列 'user'/'assistant' と type 文字列 'text'/'code'、
+  会話本文は長い日本語文字列として存在)。
+
+### 汎用 flight 解析手順 (固定キー非依存・方針 4)
+
+固定キーに依存せず **role / content / message relationship** を基準に解析する。
+
+1. **長文テキスト探索**: data 配列内の長い日本語文字列 (会話本文候補) を列挙する
+2. **role 文字列探索**: `'user'` / `'assistant'` / `'system'` / `'tool'` の文字列要素位置を列挙する
+3. **role 参照の逆引き**: role 文字列を参照する dict (role マーカー) を特定し、その親を辿って
+   message node を特定する (message node は message_id・ts・content 参照を持つ dict)
+4. **content 解決**: content dict から type ('text' 等) と parts (本文文字列) を解決する
+5. **メタデータ**: title (`_53` または HTML `<title>`)、conversation_id (`_60` 等)、create_time を取得する
+6. **重複排除と順序**: message_id で重複排除し、上記「順序の注意」の方法で並べる
+
+実装例 (2026-09-02 実測で動作):
+
+```python
+def get(idx):
+    return data[idx] if isinstance(idx, int) and 0 <= idx < len(data) else idx
+
+def resolve(x, depth=0, maxd=8):
+    """int index を data 配列の実値へ再帰解決する"""
+    if depth > maxd: return '<maxdepth>'
+    if isinstance(x, int) and 0 <= x < len(data): return resolve(data[x], depth+1, maxd)
+    if isinstance(x, dict): return {k: resolve(v, depth+1, maxd) for k, v in x.items()}
+    if isinstance(x, list): return [resolve(v, depth+1, maxd) for v in x]
+    return x
+
+# 1) message node 候補: role マーカー (_236 を持つ dict) を参照する親 dict を探す
+#    汎用的には「message_id っぽい UUID 文字列・ts float・content dict への参照を持つ dict」
+rev = {}
+for i, el in enumerate(data):
+    if isinstance(el, dict):
+        for v in el.values():
+            if isinstance(v, int): rev.setdefault(v, []).append(i)
+
+# 2) role 文字列の位置から role マーカー dict → message node を特定
+#    (2026-09-02 例: role マーカー = {_236: role} で、その親 message node は
+#     _149=id / _156=role マーカー / _160=content / _54=ts を持つ)
+
+# 3) 抽出: mid で重複排除、role in (user, assistant) & type=='text' のみ保存
+# 4) 順序: ts を 1 分バケット + user 先でソートし、交互性を検証
+```
+
+### Browser MCP フォールバック (最終手段・方針 5)
+
+HTML 取得 (curl) も失敗した場合のみ、Browser MCP で共有ページを開いて
+表示された会話テキストを抽出する。この手段は最終フォールバックであり、
+通常の取得フローでは使わない。
 
 ## 手順 2: Markdown 整形 (原本)
 
@@ -301,6 +328,10 @@ curl -s -X POST -H 'content-type: application/json' \
 - 要約は `decisions:` / `principles:` / `context:` の Markdown リスト形式にする (後から検索・参照しやすい)
 - 会話の結論がアーキテクチャ決定・ポリシーなら `event_type: decision` で main へ
 - 一時的な調査・仮説は working (`37889`) へ。迷う場合は working
+- **project は「会話の対象リポジトリのローカルフルパス」を使う** (例: 会話が
+  visualize-takeshita の構成なら `/home/tk/github/visualize-takeshita/ai-ops`、
+  ai-stack 関連なら `/home/tk-rhems/github/aktus-tk/ai-stack`)。会話内容から
+  対象リポジトリを判断し、単にテンプレートの ai-stack を流用しない。
 
 ## 重要な注意事項
 
@@ -308,7 +339,7 @@ curl -s -X POST -H 'content-type: application/json' \
    harness-mem には圧縮済みの判断・方針・制約のみ。
 2. **API は公式ドキュメント化されていない** — `/backend-api/share/` は現状動くが将来変わる可能性がある。
    壊れたら HTML フォールバック (手順 1) へ。
-3. **403 は Cloudflare challenge** — UA を変えても大抵通らない。`--compressed` を忘れない (br 圧縮)。
+3. **403 は Cloudflare challenge** — 再試行・UA 変更はしない (取得方針 2)。`--compressed` を忘れない (br 圧縮)。
 4. **`share_url` を残さない** — 公開トークン。`share_id` + `conversation_id` のみ frontmatter に残す。
 5. **シークレットを保存しない** — 手順 3 のガードを必ず通す。検知時は redact するか、デフォルト開発値と
    判断できた場合のみ手動確認 (`--continue`) で続行し、判断内容を報告に含める。
@@ -321,16 +352,20 @@ curl -s -X POST -H 'content-type: application/json' \
 ## トラブルシューティング
 
 ### API が 403 (Cloudflare challenge)
-→ 手順 1 の HTML フォールバックを使う。HTML 自体は 200 で取得できる。
+→ 取得方針 2 に従い、再試行せず直ちに手順 1 の HTML フォールバックを使う。HTML 自体は 200 で取得できる。
+
+### HTML 取得も失敗する (curl)
+→ 取得方針 5 に従い、最終フォールバックとして Browser MCP で共有ページを開き、
+表示された会話テキストを抽出する。
 
 ### flight ペイロードの json.loads が失敗する
 → `streamController.enqueue("...")` の引数は JS 文字列リテラル。`ast.literal_eval` でデコードする。
 `json.loads('"' + raw + '"')` は末尾の HTML 混入やエスケープで壊れる。
 
-### メッセージが 1 件しか出ない / user が出ない
-→ ターンが 2 回出現する重複を `(ts, role, ctype, text)` で排除しているか確認。
-`role` は turn ノードの `_150` → message dict の `_197` で引く (配列内の素の "role" 文字列は
-1 ターン分しか現れない)。
+### 既知の固定キー (flight 構造メモ) が data 配列に見つからない
+→ 構造が再度変わっている。取得方針 4 に従い、固定キーに依存せず
+「汎用 flight 解析手順」(role / content / message relationship 基準) で再調査する。
+メッセージが 1 件しか出ない / user が出ない場合も同様。
 
 ### 書き込みが 401
 → token 未設定。`source ~/.config/env` して `HARNESS_MEM_ADMIN_TOKEN` (main) を確認。
