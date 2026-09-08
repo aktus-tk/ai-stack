@@ -1,6 +1,6 @@
 ---
 name: install-cli-tools
-description: クラウド CLI (tccli / tcclit / gcloud / gcloudt / awst / az / coscli 等) が command not found になった場合のインストール・PATH 確認手順。Use when コマンドが見つからない、CLI が無い、pipx / tccli / Azure CLI / cloud-cli ラッパーのインストール、~/.local/bin や ~/bin の PATH 設定確認が必要なとき。対象: plgl, iron, dmdb, choco, visualive, visualize。
+description: クラウド CLI (awscli / tccli / tcclit / gcloud / gcloudt / awst / az / coscli 等) が command not found になった場合のインストール・PATH 確認手順。Use when コマンドが見つからない、CLI が無い、pipx / tccli / AWS CLI / Azure CLI / cloud-cli ラッパーのインストール、~/.local/bin や ~/bin の PATH 設定確認が必要なとき。対象: plgl, iron, dmdb, choco, visualive, visualize。
 ---
 
 # install-cli-tools
@@ -91,7 +91,21 @@ sudo chmod +x /usr/local/bin/coscli
 coscli --version    # 例: v1.0.8
 ```
 
-## 8. インストール後の動作確認
+## 8. AWS CLI (awscli)
+
+`aws` コマンドが無い場合 (`command -v aws` が空) は、AWS 公式のインストーラでインストールする (x86_64 Linux):
+
+```bash
+curl -LO https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+unzip awscli-exe-linux-x86_64.zip
+sudo ./aws/install
+which aws    # /usr/local/bin/aws
+aws --version
+```
+
+- `/usr/local/bin/aws` は `/usr/local/aws-cli/v2/current/bin/aws` へのシンボリックリンク。
+
+## 9. インストール後の動作確認
 
 ```bash
 tccli --version                  # 例: 3.1.160.1

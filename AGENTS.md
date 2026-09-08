@@ -239,3 +239,7 @@ RHEMS Backlog (`https://rhems-bl.backlog.com/`) の Issue 参照・検索・作�
 ## ChatGPT 会話の記録
 
 ChatGPT の会話要約 (`/dl/YYYY-MM-DD_*.md`) の記録依頼、または「記録して」と発話された場合は `chatgpt-import` Skill を使用する。共有リンク (`chatgpt.com/share/...`) は廃止 (2026-09-03)。
+
+## クラウド CLI のインストール
+
+クラウド CLI (awscli / tccli / gcloud / az / coscli / tcclit / gcloudt / awst 等) のインストール・`command not found` 対応は、`install-cli-tools` Skill (`skills/install-cli-tools/SKILL.md`) を使用する。対象: plgl, iron, dmdb, choco, visualive, visualize。
