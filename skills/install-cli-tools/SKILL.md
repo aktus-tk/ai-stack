@@ -1,6 +1,6 @@
 ---
 name: install-cli-tools
-description: クラウド CLI (tccli / tcclit / gcloud / gcloudt / awst / az 等) が command not found になった場合のインストール・PATH 確認手順。Use when コマンドが見つからない、CLI が無い、pipx / tccli / Azure CLI / cloud-cli ラッパーのインストール、~/.local/bin や ~/bin の PATH 設定確認が必要なとき。対象: plgl, iron, dmdb, choco, visualive, visualize。
+description: クラウド CLI (tccli / tcclit / gcloud / gcloudt / awst / az / coscli 等) が command not found になった場合のインストール・PATH 確認手順。Use when コマンドが見つからない、CLI が無い、pipx / tccli / Azure CLI / cloud-cli ラッパーのインストール、~/.local/bin や ~/bin の PATH 設定確認が必要なとき。対象: plgl, iron, dmdb, choco, visualive, visualize。
 ---
 
 # install-cli-tools
@@ -80,7 +80,18 @@ which az       # /usr/bin/az
 az version
 ```
 
-## 7. インストール後の動作確認
+## 7. coscli (Tencent Cloud COS CLI)
+
+- `coscli` コマンドが無い場合 (`command -v coscli` が空) は、GitHub Releases のバイナリを直接 `/usr/local/bin/coscli` にダウンロードする。
+
+```bash
+command -v coscli   # 空なら未インストール
+sudo curl -sL -o /usr/local/bin/coscli https://github.com/tencentyun/coscli/releases/download/v1.0.8/coscli-v1.0.8-linux-amd64
+sudo chmod +x /usr/local/bin/coscli
+coscli --version    # 例: v1.0.8
+```
+
+## 8. インストール後の動作確認
 
 ```bash
 tccli --version                  # 例: 3.1.160.1
@@ -89,6 +100,7 @@ direnv exec projects/iron tcclit cvm ls   # プロジェクト指定の例
 gcloud version                   # 例: Google Cloud SDK 576.0.0
 az version                       # Azure CLI
 aws --version                    # AWS CLI (この環境では未インストールの場合あり。awst ラッパーの実体は cloud-cli/aws-cli 配下)
+coscli --version                 # 例: v1.0.8
 ```
 
 ## 注意
