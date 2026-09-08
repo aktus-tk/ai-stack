@@ -16,6 +16,15 @@ ChatGPT 会話の記録依頼 (`/dl/YYYY-MM-DD_*.md` の提示、または「記
 - 原本 → `aktus-tk/chatgpt` repo `conversations/` へ保存し commit/push
 - 判断・方針のみ → harness-mem main へ要約記録 (Granite vector 登録まで)
 
+## 実行方針 (2026-09-08 決定)
+
+**記録だけのタスクでは subagent 委譲・QA レビュー・検証をしない。直接書き込む。**
+
+- 「記録して」等の記録依頼は単純な決め手順の実行なので、engineer/qa に委譲せず、
+  自分で curl / git を実行して完了させる。
+- 手順 6 の検索での読み出し確認はルーチンでは行わない (トラブル時の切り分けにのみ使用)。
+- 失敗した場合のみ、原因を確認して対処する。成功したら追加確認なしで終了。
+
 ## 取得方法 (2026-09-03 決定: /dl/ から直接読み取り)
 
 **共有リンクの自動解析 (curl / HTML flight 解析) も手動貼り付けも廃止した**。
@@ -199,7 +208,8 @@ curl -s -X POST \
   -d '{"limit": 100}' \
   "http://100.92.131.75:37888/v1/admin/reindex-vectors" | jq '.items[0] | {reindexed, vector_coverage, missing_vectors_remaining}'
 
-# 3. 検索で読み出し確認 (書き込み後は必ず再取得して反映を確認する)
+# 3. 検索で読み出し確認 (ルーチンでは不要。検索に出ない等のトラブル時のみ)
+#    記録直後に検索でヒットしない場合は「トラブルシューティング: 記録後に検索でヒットしない」を参照
 curl -s -X POST -H 'content-type: application/json' \
   -d '{"query":"<確認クエリ>","project":"/home/tk-rhems/github/aktus-tk/ai-stack","limit":3,"debug":true}' \
   "http://100.92.131.75:37888/v1/search" | jq '.items[].id'
@@ -259,6 +269,12 @@ FTS は再構築されない)。サーバーで `docker compose restart harness-
 → gh の credential helper が効いていない場合がある。`gh auth status` で https + repo scope を確認し、
 `gh repo clone` で得た origin URL (https) のまま push する。SSH 鍵 (id_ed25519) は tk-rhems の
 GitHub アカウントに登録済みの可能性があるため、必要なら origin を SSH URL に切り替える。
+- **rejected (non-fast-forward)** の場合: 並行セッションが remote に push 済みで diverged している
+  可能性が高い。`git fetch` → `git rebase origin/main` → 再 push で解消する
+  (2026-09-08 実測。origin は https のまま成功)。
+- このマシンでは実行ユーザーが `tk` でリポジトリ所有者が `tk-rhems` の場合がある。
+  git 操作は `sudo -u tk-rhems git ...` で実行する (dubious ownership エラー時は
+  tk-rhems ユーザーで `git config --global --add safe.directory <repo>` を設定)。
 
 ## 関連
 
