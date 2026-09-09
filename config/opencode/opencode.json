@@ -31,8 +31,6 @@
       "systemctl kill *": "deny",
       "systemctl disable *": "deny",
       "systemctl mask *": "deny",
-      "git push *": "deny",
-      "git commit *": "deny",
       "kubectl delete *": "deny",
       "kubectl apply *": "deny",
       "terraform apply *": "deny",
