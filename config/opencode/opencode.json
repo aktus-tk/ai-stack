@@ -5,7 +5,38 @@
   ],
   "permission": {
     "external_directory": {
-      "~/gdrive/**": "allow"
+      "~/gdrive/**": "allow",
+      "~/.ssh": "allow",
+      "~/.ssh/**": "allow",
+      "~/github/**": "allow",
+      "~/.aws/**": "allow",
+      "~/.config/**": "allow",
+      "~/.kube/**": "allow",
+      "~/.gcloud/**": "allow"
+    },
+    "edit": {
+      "~/.ssh/**": "deny"
+    },
+    "bash": {
+      "rm *": "deny",
+      "rm -rf *": "deny",
+      "sudo rm *": "deny",
+      "reboot": "deny",
+      "reboot *": "deny",
+      "shutdown *": "deny",
+      "halt *": "deny",
+      "poweroff *": "deny",
+      "systemctl restart *": "deny",
+      "systemctl stop *": "deny",
+      "systemctl kill *": "deny",
+      "systemctl disable *": "deny",
+      "systemctl mask *": "deny",
+      "git push *": "deny",
+      "git commit *": "deny",
+      "kubectl delete *": "deny",
+      "kubectl apply *": "deny",
+      "terraform apply *": "deny",
+      "terraform destroy *": "deny"
     }
   },
   "default_agent": "director",
