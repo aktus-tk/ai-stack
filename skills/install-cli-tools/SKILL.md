@@ -1,11 +1,11 @@
 ---
 name: install-cli-tools
-description: クラウド CLI (awscli / tccli / tcclit / gcloud / gcloudt / awst / az / coscli 等) が command not found になった場合のインストール・PATH 確認手順。Use when コマンドが見つからない、CLI が無い、pipx / tccli / AWS CLI / Azure CLI / cloud-cli ラッパーのインストール、~/.local/bin や ~/bin の PATH 設定確認が必要なとき。対象: plgl, iron, dmdb, choco, visualive, visualize。
+description: 各種 CLI (クラウド CLI: awscli / tccli / tcclit / gcloud / gcloudt / awst / az / coscli、GitHub CLI: gh 等) が command not found になった場合のインストール・PATH 確認手順。Use when コマンドが見つからない、CLI が無い、gh / GitHub CLI / pipx / tccli / AWS CLI / Azure CLI / cloud-cli ラッパーのインストール、~/.local/bin や ~/bin の PATH 設定確認が必要なとき。対象: plgl, iron, dmdb, choco, visualive, visualize。
 ---
 
 # install-cli-tools
 
-クラウド CLI コマンドが `command not found` になる場合のインストール手順と動作確認方法。
+クラウド CLI・GitHub CLI などのコマンドが `command not found` になる場合のインストール手順と動作確認方法。
 
 ## 1. pipx
 
@@ -105,7 +105,27 @@ aws --version
 
 - `/usr/local/bin/aws` は `/usr/local/aws-cli/v2/current/bin/aws` へのシンボリックリンク。
 
-## 9. インストール後の動作確認
+## 9. gh (GitHub CLI)
+
+`gh` コマンドが無い場合 (`command -v gh` が空) は、GitHub 公式 apt リポジトリからインストールする (Debian/Ubuntu):
+
+```bash
+(type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
+&& sudo mkdir -p -m 755 /etc/apt/keyrings \
+&& out=$(mktemp) && wget -nv -O$out https://cli.github.com/keyrings/githubcli-archive-keyring.gpg \
+&& cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+&& sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+&& sudo apt update \
+&& sudo apt install gh -y
+```
+
+- インストール先は `/usr/bin/gh` (このマシンでは 2.81.0 を確認済み, 2026-09-08)。
+- バージョン確認: `gh --version`。最新化は `sudo apt update && sudo apt install --only-upgrade gh` (例: 2.99.0 が candidate)。
+- 認証: `gh auth login` (対話式) または `gh auth login --with-token < token.txt`。トークン値はファイル・ログへ記録しない。状態確認は `gh auth status`。
+- 詳細は GitHub 公式ドキュメント (https://github.com/cli/cli/blob/trunk/docs/install_linux.md) を参照。
+
+## 10. インストール後の動作確認
 
 ```bash
 tccli --version                  # 例: 3.1.160.1
@@ -115,6 +135,7 @@ gcloud version                   # 例: Google Cloud SDK 576.0.0
 az version                       # Azure CLI
 aws --version                    # AWS CLI (この環境では未インストールの場合あり。awst ラッパーの実体は cloud-cli/aws-cli 配下)
 coscli --version                 # 例: v1.0.8
+gh --version                     # GitHub CLI (例: gh version 2.81.0)
 ```
 
 ## 注意
