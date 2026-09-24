@@ -59,6 +59,19 @@
     }
   },
   "provider": {
+    "deepinfra": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DeepInfra",
+      "options": {
+        "baseURL": "https://api.deepinfra.com/v1/openai",
+        "apiKey": "{env:DEEPINFRA_API_KEY}"
+      },
+      "models": {
+        "zai-org/GLM-5.3-Flash": {
+          "name": "GLM 5.3 Flash"
+        }
+      }
+    },
     "opencode-go": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "OpenCode Go",
